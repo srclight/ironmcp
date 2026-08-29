@@ -19,6 +19,7 @@ AND the copies have drifted. Not before.
 
 from .build import code_sha, started_at, uptime_s
 from .ops import EX_CONFIG, attach_healthz, bearer_middleware, require_token_or_exit
+from .seams import LAST_KNOWN_GOOD, SeamError, verify_seams
 from .strict import StrictArgsMCP
 
 __version__ = "0.1.0"
@@ -26,4 +27,5 @@ __all__ = [
     "StrictArgsMCP",
     "code_sha", "started_at", "uptime_s",
     "attach_healthz", "bearer_middleware", "require_token_or_exit", "EX_CONFIG",
+    "SeamError", "verify_seams", "LAST_KNOWN_GOOD",
 ]

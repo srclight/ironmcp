@@ -6,7 +6,7 @@ A guard nobody has seen fire is a guard nobody knows works -- established the ha
 
 import pytest
 
-from mcpkit.seams import SeamError, verify_seams
+from mcpkit import SeamError, verify_seams
 
 
 def test_seams_pass_against_the_installed_sdk():
