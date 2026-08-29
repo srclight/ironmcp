@@ -45,13 +45,38 @@ def _src_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def _upstream_sha() -> str | None:
+    """The revision of mcpkit's own checkout, independent of where the generator was invoked."""
+    import subprocess
+    root = _src_dir()
+    try:
+        out = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"],
+                             capture_output=True, text=True, timeout=5)
+        if out.returncode != 0:
+            return None
+        sha = out.stdout.strip() or None
+        if sha:
+            dirty = subprocess.run(["git", "-C", str(root), "status", "--porcelain"],
+                                   capture_output=True, text=True, timeout=5)
+            if dirty.returncode == 0 and dirty.stdout.strip():
+                sha += "+dirty"
+        return sha
+    except Exception:
+        return None
+
+
 def render(version: str | None = None, code_sha: str | None = None) -> str:
     """Return the single-file form. Deterministic: same inputs, byte-identical output."""
     if version is None:
         from . import __version__ as version  # type: ignore[no-redef]
     if code_sha is None:
-        from .build import code_sha as _cs
-        code_sha = _cs() or "unknown"
+        # MUST resolve from mcpkit's OWN tree, not the cwd. build.code_sha() answers "what revision
+        # is this process running from", which is the consumer's repo when the generator is invoked
+        # from inside one. Measured 2026-08-29 during the zhcorpus migration: the vendored file
+        # claimed "upstream @ e04746d+dirty", which was zhcorpus's HEAD and zhcorpus's 18 dirty
+        # files. Every consumer would have stamped a different upstream, making the provenance
+        # header actively misleading -- worse than absent.
+        code_sha = _upstream_sha() or "unknown"
 
     parts: list[str] = []
     for mod in _MODULES:
