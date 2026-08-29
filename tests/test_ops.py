@@ -85,3 +85,12 @@ def test_stdio_needs_no_token_and_http_with_token_proceeds():
 def test_code_sha_is_stable_within_a_process():
     """Stamped once at import. A value that moves under a running process is the lie being guarded."""
     assert code_sha() == code_sha()
+
+
+def test_healthz_reports_BOTH_version_axes():
+    """A chassis adds a second axis. Reporting only the server's revision leaves the first
+    cross-version bug undiagnosable from outside (pack review Q2, 2026-08-29)."""
+    with TestClient(_app()) as c:
+        body = c.get("/healthz").json()
+    assert "code_sha" in body          # which server code
+    assert body["mcpkit_version"]      # which chassis

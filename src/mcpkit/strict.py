@@ -33,6 +33,11 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 
+from .seams import verify_seams
+
+# Checked once, at import. A missing seam must not degrade into silent non-enforcement.
+verify_seams()
+
 __all__ = ["StrictArgsMCP"]
 
 

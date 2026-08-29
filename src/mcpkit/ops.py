@@ -20,6 +20,11 @@ from typing import Any, Callable, Mapping
 
 from .build import code_sha, started_at, uptime_s
 
+
+def _mcpkit_version() -> str:
+    from . import __version__
+    return __version__
+
 __all__ = ["attach_healthz", "bearer_middleware", "require_token_or_exit", "EX_CONFIG"]
 
 # sysexits.h EX_CONFIG. Pairs with systemd RestartPreventExitStatus=78 so a misconfigured unit
@@ -59,6 +64,9 @@ def attach_healthz(
                 "name": name or getattr(mcp, "name", None),
                 "pid": os.getpid(),
                 "code_sha": code_sha(),
+                # A chassis adds a SECOND version axis. Without it the first cross-version bug
+                # is undiagnosable from outside: "which server is on which mcpkit" has no answer.
+                "mcpkit_version": _mcpkit_version(),
                 "started_at": started_at(),
                 "uptime_s": round(uptime_s(), 3),
                 **({"probes": results} if results else {}),
