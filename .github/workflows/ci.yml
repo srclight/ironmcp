@@ -1,0 +1,53 @@
+name: CI
+
+# PRECONDITION, not a follow-up (pack review, 2026-08-29).
+# Six servers would depend on this package. srclight's only workflow is publish.yml, which runs
+# `python -m build` and publishes WITHOUT running a single test. Shipping a hand-tested chassis
+# through a pipeline that does not test is this project's own failure family one layer up:
+# a declaration of quality that never executes.
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[dev]"
+      # conftest.py fails the run on an unexplained skip; --strict-markers/--strict-config and
+      # warnings-as-errors come from pyproject. A green bar here means the tests RAN.
+      - run: pytest -q
+
+  dependency-rule:
+    # STUBBY, 2026-08-29: after publishing, this package becomes a write path into six servers,
+    # one of which ACTS on its input. The "no dependency beyond mcp" condition therefore has to be
+    # ENFORCED rather than assumed -- every added dependency widens that path.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: runtime dependencies must be mcp and nothing else
+        run: |
+          python - <<'PY'
+          import tomllib, sys
+          deps = tomllib.load(open("pyproject.toml","rb"))["project"]["dependencies"]
+          names = sorted(d.split(">")[0].split("=")[0].split("[")[0].strip() for d in deps)
+          if names != ["mcp"]:
+              print(f"FAIL: runtime dependencies are {names}; only 'mcp' is permitted.")
+              print("Every added dependency widens the supply-chain path into six servers.")
+              sys.exit(1)
+          print(f"OK: runtime dependencies = {names}")
+          PY
