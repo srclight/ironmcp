@@ -139,3 +139,28 @@ def test_schema_claim_matches_runtime_behaviour():
     with pytest.raises(ToolError):
         asyncio.run(srv.call_tool("scoped_search", {"query": "x", "extra": 1}))
     assert state["entered"] == 0
+
+
+def test_stamping_does_not_mutate_the_live_registry():
+    """The advertised schema is stamped on the way OUT, not written back into the registry.
+
+    FastMCP currently builds transient schemas in list_tools, so setdefault() lands on a copy. That
+    is an invariant this package depends on rather than one it enforces: if list_tools ever returned
+    the live `tool.parameters` dict, stamping would write a promise into shared state that other
+    code paths — including any unguarded one — would then carry.
+
+    canes-fideles-d8 hit the sharp end of this from the other direction (2026-08-29): a tool on a
+    permissive path must never advertise a guarantee it does not keep, which is the same lie
+    pointing the other way.
+    """
+    srv, _ = _server()
+    registry_schema = srv._tool_manager.get_tool("scoped_search").parameters
+    assert "additionalProperties" not in registry_schema
+
+    advertised = {t.name: t for t in asyncio.run(srv.list_tools())}
+    assert advertised["scoped_search"].inputSchema["additionalProperties"] is False
+
+    still_clean = srv._tool_manager.get_tool("scoped_search").parameters
+    assert "additionalProperties" not in still_clean, (
+        "list_tools() wrote the stamp back into the registry — the advertised guarantee is now "
+        "carried by shared state that unguarded paths would also serve")
