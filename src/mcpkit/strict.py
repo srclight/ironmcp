@@ -42,16 +42,24 @@ class StrictArgsMCP(FastMCP):
     async def call_tool(self, name: str, arguments: dict[str, Any]):  # type: ignore[override]
         tool = self._tool_manager.get_tool(name)
         if tool is not None and isinstance(arguments, dict):
-            accepted = set((tool.parameters or {}).get("properties") or {})
-            # An empty property set means "schema unknown", NOT "accepts nothing". Refusing
-            # everything there would brick tools whose parameters cannot be introspected --
-            # a guard that becomes a wall is worse than the bug it prevents.
-            if accepted:
+            params = tool.parameters or {}
+            # ABSENT "properties" vs PRESENT-BUT-EMPTY are different facts, and conflating them
+            # leaves a hole (found 2026-08-29 by exhaustive testing against a realistic server):
+            #   * key ABSENT           -> the schema could not be introspected. Say nothing;
+            #                             refusing everything would brick the tool, and a guard
+            #                             that becomes a wall is worse than the bug it prevents.
+            #   * key PRESENT, empty   -> FastMCP generated {"properties": {}} because the tool
+            #                             genuinely takes NO arguments. Extras must be refused,
+            #                             or a zero-parameter tool is the one place a typo still
+            #                             slips through silently.
+            if "properties" in params:
+                accepted = set(params.get("properties") or {})
                 unknown = sorted(k for k in arguments if k not in accepted)
                 if unknown:
+                    accepts = ", ".join(sorted(accepted)) if accepted else "(no arguments)"
                     raise ToolError(
                         f"unknown argument(s): {', '.join(unknown)}. "
-                        f"Tool {name!r} accepts: {', '.join(sorted(accepted))}. "
+                        f"Tool {name!r} accepts: {accepts}. "
                         "Nothing was executed and no result was computed. "
                         # The stale-server hint is load-bearing: whoever hits this has no other
                         # route to the conclusion, because the call looked fine and the tool
@@ -70,6 +78,8 @@ class StrictArgsMCP(FastMCP):
             # Only stamp object schemas that declare properties. Stamping a schema with no
             # properties would advertise "accepts nothing", contradicting the call_tool rule
             # above that treats an empty property set as unknown rather than closed.
-            if isinstance(schema, dict) and schema.get("type") == "object" and schema.get("properties"):
+            # Stamp whenever "properties" is present -- including when empty, because an empty
+            # property set is now enforced as "accepts nothing" rather than "unknown".
+            if isinstance(schema, dict) and schema.get("type") == "object" and "properties" in schema:
                 schema.setdefault("additionalProperties", False)
         return tools

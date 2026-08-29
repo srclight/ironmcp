@@ -97,12 +97,34 @@ def test_advertised_schema_declares_the_closed_contract():
     assert tools["scoped_search"].inputSchema.get("additionalProperties") is False
 
 
-def test_zero_parameter_tool_schema_is_NOT_stamped():
-    # Stamping a property-less schema would advertise "accepts nothing", contradicting the
-    # runtime rule that treats an empty property set as unknown.
-    srv, _ = _server()
+def test_zero_parameter_tool_refuses_extras_and_advertises_it():
+    """A genuinely zero-parameter tool must be closed, not a hole.
+
+    FastMCP emits {"properties": {}} for a no-arg tool -- the key is PRESENT and empty, which is
+    a different fact from the key being absent. Conflating them (as the first version of this
+    guard did) left zero-parameter tools as the one place a typo still slipped through silently.
+    """
+    srv, state = _server()
+    with pytest.raises(ToolError) as e:
+        asyncio.run(srv.call_tool("no_params", {"bogus": 1}))
+    assert "bogus" in str(e.value)
+    assert "(no arguments)" in str(e.value)   # the accepted-set message stays sensible
+    assert state["entered"] == 0
     tools = {t.name: t for t in asyncio.run(srv.list_tools())}
-    assert "additionalProperties" not in tools["no_params"].inputSchema
+    assert tools["no_params"].inputSchema.get("additionalProperties") is False
+
+
+def test_tool_with_UNINTROSPECTABLE_schema_is_not_bricked():
+    """Key ABSENT means unknown, and unknown must stay permissive.
+
+    A guard that becomes a wall is worse than the bug it prevents.
+    """
+    srv, state = _server()
+    tool = srv._tool_manager.get_tool("scoped_search")
+    tool.parameters = {"type": "object"}      # no "properties" key at all
+    res = asyncio.run(srv.call_tool("scoped_search", {"query": "x", "anything": 1}))
+    assert state["entered"] == 1              # allowed through, not refused
+    assert res is not None
 
 
 def test_schema_claim_matches_runtime_behaviour():
