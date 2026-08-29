@@ -52,3 +52,26 @@ def test_generated_file_is_importable_and_self_contained(tmp_path):
          "assert m.StrictArgsMCP and m.attach_healthz and m.code_sha; print('ok')" % str(tmp_path)],
         capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_a_stale_copy_is_rejected_even_though_its_hash_is_valid(tmp_path):
+    """The hash catches hand-edits; it says nothing about AGE.
+
+    Without this, four vendored copies three versions apart all pass verification, and vendoring is
+    strictly worse than a pinned dependency — which at least records a version.
+    (canes-fideles-d8's verification, 2026-08-29.)
+    """
+    f = tmp_path / "mcpkit.py"
+    f.write_text(render(version="0.0.9"))     # correctly generated, correctly hashed, OLD
+    ok, msg = verify(f)
+    assert not ok, "a stale vendored copy must not pass verification"
+    assert "STALE" in msg
+    assert "0.0.9" in msg                      # says what it has
+    assert "regenerate" in msg.lower()         # says what to do
+
+
+def test_staleness_check_can_be_disabled_for_hash_only_use(tmp_path):
+    f = tmp_path / "mcpkit.py"
+    f.write_text(render(version="0.0.9"))
+    ok, _ = verify(f, check_stale=False)
+    assert ok, "hash-only verification must still pass on an unmodified older copy"

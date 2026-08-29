@@ -109,8 +109,23 @@ copy, so divergence is caught mechanically rather than discovered in a wrong ans
     return header + body
 
 
-def verify(path: str | Path) -> tuple[bool, str]:
-    """Check a vendored file has not been hand-edited. Returns (ok, message)."""
+def embedded_info(path: str | Path) -> dict[str, str | None]:
+    """Read the version and upstream sha a vendored copy claims."""
+    import re as _re
+    text = Path(path).read_text()
+    v = _re.search(r'^__version__ = "([^"]+)"', text, _re.MULTILINE)
+    u = _re.search(r'^__mcpkit_upstream_sha__ = "([^"]+)"', text, _re.MULTILINE)
+    return {"version": v.group(1) if v else None, "upstream_sha": u.group(1) if u else None}
+
+
+def verify(path: str | Path, *, check_stale: bool = True) -> tuple[bool, str]:
+    """Check a vendored file is unmodified AND not stale.
+
+    TWO DIFFERENT FAILURES, and the second is the one that makes vendoring honest. A hash catches a
+    hand-edit; it says nothing about age, so four copies three versions apart all pass it. Without
+    a staleness check, vendoring is strictly worse than a pinned dependency, which at least records
+    a version. With it, the difference narrows to ergonomics. (canes-fideles-d8, 2026-08-29.)
+    """
     text = Path(path).read_text()
     for line in text.splitlines():
         if line.startswith(BODY_HASH_MARKER):
@@ -129,7 +144,25 @@ def verify(path: str | Path) -> tuple[bool, str]:
             "A vendored copy has been hand-edited. Regenerate from upstream instead — the point "
             "of the generated form is that six copies cannot silently diverge."
         )
-    return True, f"{path}: matches upstream (sha256={actual[:16]}…)"
+
+    info = embedded_info(path)
+    if check_stale:
+        from . import __version__ as current_version
+        current_sha = _upstream_sha()
+        if info["version"] != current_version:
+            return False, (
+                f"{path}: STALE. vendored mcpkit {info['version']}, upstream is {current_version}. "
+                "The hash proves it was not hand-edited; it says nothing about age. "
+                f"Regenerate: python -m mcpkit.vendor --out {path}"
+            )
+        if current_sha and info["upstream_sha"] and info["upstream_sha"] != current_sha:
+            return True, (
+                f"{path}: version {info['version']} current, but generated from {info['upstream_sha']} "
+                f"and upstream is now {current_sha} — same version, different commit. "
+                "Regenerate if that commit changed behaviour."
+            )
+    return True, (f"{path}: OK — mcpkit {info['version']} from {info['upstream_sha']}, "
+                  f"unmodified (sha256={actual[:16]}…)")
 
 
 def _main() -> None:
