@@ -28,6 +28,7 @@ runtime refusal AND stamps ``additionalProperties: false`` onto the listed schem
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -61,18 +62,7 @@ class StrictArgsMCP(FastMCP):
                 accepted = set(params.get("properties") or {})
                 unknown = sorted(k for k in arguments if k not in accepted)
                 if unknown:
-                    accepts = ", ".join(sorted(accepted)) if accepted else "(no arguments)"
-                    raise ToolError(
-                        f"unknown argument(s): {', '.join(unknown)}. "
-                        f"Tool {name!r} accepts: {accepts}. "
-                        "Nothing was executed and no result was computed. "
-                        # The stale-server hint is load-bearing: whoever hits this has no other
-                        # route to the conclusion, because the call looked fine and the tool
-                        # exists. A long-lived daemon serves the code it launched with.
-                        "If you expected these arguments to work, this server process is probably "
-                        "running older code than you think - check the server's reported revision "
-                        "and reconnect the MCP."
-                    )
+                    raise ToolError(_unknown_args_message(name, unknown, accepted))
         return await super().call_tool(name, arguments)
 
     async def list_tools(self):  # type: ignore[override]
@@ -88,3 +78,44 @@ class StrictArgsMCP(FastMCP):
             if isinstance(schema, dict) and schema.get("type") == "object" and "properties" in schema:
                 schema.setdefault("additionalProperties", False)
         return tools
+
+
+# The error message's SIZE is bounded by the server, never by its input. A caller sending 5,000
+# unknown keys must not be able to reflect a 59kB error back over MCP and into the log
+# (canes-fideles-d8, 2026-08-30). Values are NEVER echoed, only key NAMES — a rejected argument
+# cannot be used to bounce data into logs, and that is deliberate, not incidental.
+_MAX_ENUMERATED = 10
+
+
+def _unknown_args_message(name: str, unknown: list[str], accepted: set[str]) -> str:
+    shown = unknown[:_MAX_ENUMERATED]
+    more = len(unknown) - len(shown)
+    listed = ", ".join(shown) + (f", and {more} more" if more > 0 else "")
+    accepts = ", ".join(sorted(accepted)) if accepted else "(no arguments)"
+
+    # NFKC confusables. Python normalises identifiers at PARSE time, so a parameter written with
+    # U+00B5 MICRO SIGN is advertised as U+03BC GREEK MU — two glyphs identical in nearly every
+    # font. A developer copying the name from source is refused by something that looks exactly
+    # like what they were told to send. Diagnose it by naming the CODEPOINT, since whoever hits
+    # this has no other route to the answer. THE SCHEMA IS AUTHORITATIVE FOR ARGUMENT NAMES,
+    # NEVER THE SOURCE, because normalisation happens between them.
+    hints = []
+    norm_accepted = {unicodedata.normalize("NFKC", a): a for a in accepted}
+    for k in shown:
+        canon = unicodedata.normalize("NFKC", k)
+        if canon != k and canon in norm_accepted:
+            cps = " ".join(f"U+{ord(c):04X}" for c in k)
+            hints.append(f"{k!r} ({cps}) normalises to {norm_accepted[canon]!r}, which IS accepted")
+
+    parts = [
+        f"unknown argument(s): {listed}.",
+        f"Tool {name!r} accepts: {accepts}.",
+        "Nothing was executed and no result was computed.",
+    ]
+    if hints:
+        parts.append("Note: " + "; ".join(hints) + ".")
+    parts.append(
+        "If you expected these arguments to work, this server process is probably running older "
+        "code than you think - check the server's reported revision and reconnect the MCP."
+    )
+    return " ".join(parts)

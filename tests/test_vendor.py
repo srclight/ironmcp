@@ -140,3 +140,14 @@ def test_audit_is_silent_on_success_and_loud_on_a_missing_copy(tmp_path):
     ok, msgs = audit(manifest)
     assert not ok
     assert any("MISSING" in m for m in msgs)
+
+
+def test_crlf_checkout_does_not_read_as_TAMPERED(tmp_path):
+    """git autocrlf on a Windows clone rewrites LF->CRLF. verify() must not flag that as tampering
+    — a false TAMPERED is the worst direction for a security check, because the first response to a
+    false alarm is to stop trusting the alarm. (Predicted by canes-fideles-d8; survives because
+    Path.read_text() does universal-newline translation — pinned here so it stays deliberate.)"""
+    f = tmp_path / "m.py"
+    f.write_bytes(render().replace("\n", "\r\n").encode())
+    ok, msg = verify(f)
+    assert ok, f"CRLF checkout falsely flagged: {msg}"

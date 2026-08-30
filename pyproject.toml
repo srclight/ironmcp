@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcpkit"
-version = "0.1.0"
+version = "0.2.0"
 description = "Shared MCP server policy for the Loqu8/Srclight/Gig8 estate. Policy, not capability: it ships no tools."
 requires-python = ">=3.11"
 dependencies = ["mcp>=1.28,<2"]

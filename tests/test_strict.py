@@ -164,3 +164,42 @@ def test_stamping_does_not_mutate_the_live_registry():
     assert "additionalProperties" not in still_clean, (
         "list_tools() wrote the stamp back into the registry — the advertised guarantee is now "
         "carried by shared state that unguarded paths would also serve")
+
+
+# ---- adversarial battery from canes-fideles-d8's caneslight run (2026-08-30) -------------------
+
+def test_error_size_is_bounded_by_the_server_not_the_caller():
+    """5,000 unknown keys must not reflect a 59kB error back over MCP and into the log. The caller
+    controls its input; it must not thereby control response size or log volume."""
+    srv, _ = _server()
+    with pytest.raises(ToolError) as e:
+        asyncio.run(srv.call_tool("scoped_search", {f"bogus_{i}": 1 for i in range(5000)}))
+    msg = str(e.value)
+    assert len(msg) < 1000, f"error length {len(msg)} is caller-controlled"
+    assert "and 4990 more" in msg          # count stays exact
+    assert "bogus_0" in msg                 # still enumerates the first few
+
+
+def test_values_are_never_echoed_only_key_names():
+    """A rejected argument must not be usable to reflect its VALUE into logs. Deliberate, not
+    incidental — the message names keys, never values."""
+    srv, _ = _server()
+    secret = "SENSITIVE_" + "A" * 5000
+    with pytest.raises(ToolError) as e:
+        asyncio.run(srv.call_tool("scoped_search", {"bogus": secret}))
+    assert "SENSITIVE_" not in str(e.value)
+
+
+def test_nfkc_confusable_is_diagnosed_by_codepoint():
+    """Python normalises identifiers at parse time, so a parameter written U+00B5 is advertised as
+    U+03BC — visually identical. A refusal that only reprints the glyph is illegible; name the
+    codepoint. The schema is authoritative for argument names, never the source."""
+    srv = StrictArgsMCP("t")
+    ns: dict = {}
+    exec("def mu_tool(μval: str) -> str: return μval", ns)   # U+03BC in the identifier
+    srv.tool()(ns["mu_tool"])
+    with pytest.raises(ToolError) as e:
+        asyncio.run(srv.call_tool("mu_tool", {"µval": "x"}))       # U+00B5 from the caller
+    msg = str(e.value)
+    assert "U+00B5" in msg                  # names the codepoint of what was sent
+    assert "IS accepted" in msg             # and says the normalised form works
