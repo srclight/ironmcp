@@ -7,7 +7,10 @@ name = "mcpkit"
 version = "0.2.0"
 description = "Shared MCP server policy for the Loqu8/Srclight/Gig8 estate. Policy, not capability: it ships no tools."
 requires-python = ">=3.11"
-dependencies = ["mcp>=1.28,<2"]
+# starlette is used DIRECTLY by ops.py (JSONResponse, BaseHTTPMiddleware) and arrives transitively
+# through mcp today -- but a direct import is a direct dependency, and pinning it here means an mcp
+# release that dropped starlette would fail at install, loudly, instead of at first /healthz request.
+dependencies = ["mcp>=1.28,<2", "starlette"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]

@@ -93,7 +93,13 @@ def bearer_middleware(token: str, *, exempt: tuple[str, ...] = (HEALTH_PATH,)):
             prefix = "Bearer "
             # compare_digest, not ==: an early-exit comparison leaks the token a byte at a time.
             if not (got.startswith(prefix) and hmac.compare_digest(got[len(prefix):], token)):
-                return JSONResponse({"error": "unauthorized"}, status_code=401)
+                # WWW-Authenticate on the 401 is what the MCP spec's OAuth flow expects: it names
+                # the scheme the client must use, so a compliant client knows HOW to retry rather
+                # than only THAT it failed. The scheme is Bearer; there is no realm to leak.
+                return JSONResponse(
+                    {"error": "unauthorized"}, status_code=401,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
             return await call_next(request)
 
     return _Bearer

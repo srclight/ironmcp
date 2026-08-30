@@ -41,40 +41,59 @@ verify_seams()
 
 __all__ = ["StrictArgsMCP"]
 
+# The generic stale-server diagnosis, used when a server does not name its own revision surface.
+# A server that HAS one (caneslight -> pack_status, srclight -> index_status) supplies a better
+# string via the reconnect_hint constructor argument. It is DATA, never a method: a consumer hands
+# over a string and nothing else, so a later change to the surrounding message still reaches every
+# consumer. A method hook would re-fork call_tool's neighbourhood -- the exact thing vendoring one
+# shared policy exists to prevent.
+_DEFAULT_RECONNECT_HINT = "check the server's reported revision and reconnect the MCP"
+
 
 class StrictArgsMCP(FastMCP):
     """A FastMCP that rejects unknown tool arguments and advertises that it does."""
+
+    def __init__(self, *args: Any, reconnect_hint: str | None = None, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._reconnect_hint = reconnect_hint or _DEFAULT_RECONNECT_HINT
 
     async def call_tool(self, name: str, arguments: dict[str, Any]):  # type: ignore[override]
         tool = self._tool_manager.get_tool(name)
         if tool is not None and isinstance(arguments, dict):
             params = tool.parameters or {}
-            # ABSENT "properties" vs PRESENT-BUT-EMPTY are different facts, and conflating them
-            # leaves a hole (found 2026-08-29 by exhaustive testing against a realistic server):
-            #   * key ABSENT           -> the schema could not be introspected. Say nothing;
-            #                             refusing everything would brick the tool, and a guard
-            #                             that becomes a wall is worse than the bug it prevents.
-            #   * key PRESENT, empty   -> FastMCP generated {"properties": {}} because the tool
-            #                             genuinely takes NO arguments. Extras must be refused,
-            #                             or a zero-parameter tool is the one place a typo still
-            #                             slips through silently.
-            if "properties" in params:
+            # THREE facts about a schema, and each wants a different answer. Conflating any two of
+            # them has bitten this estate once each:
+            #   * "properties" ABSENT              -> schema uninstrospectable. Stay permissive;
+            #                                         a guard that bricks what it cannot read is a
+            #                                         wall, worse than the bug it prevents.
+            #   * "properties" PRESENT, empty      -> FastMCP emits {"properties": {}} for a tool
+            #                                         that genuinely takes NO arguments. Refuse
+            #                                         extras, or a zero-parameter tool is the one
+            #                                         place a typo still slips through silently.
+            #   * additionalProperties is True     -> the author OPTED OUT: a passthrough/proxy tool
+            #                                         that accepts arbitrary keys (the JSON-Schema
+            #                                         standard way to say so). Honour it -- refusing
+            #                                         here would advertise-open-but-refuse, the same
+            #                                         catalog-lies-about-runtime bug this guard
+            #                                         exists to close, pointing the other way.
+            if "properties" in params and params.get("additionalProperties") is not True:
                 accepted = set(params.get("properties") or {})
                 unknown = sorted(k for k in arguments if k not in accepted)
                 if unknown:
-                    raise ToolError(_unknown_args_message(name, unknown, accepted))
+                    raise ToolError(_unknown_args_message(name, unknown, accepted, self._reconnect_hint))
         return await super().call_tool(name, arguments)
 
     async def list_tools(self):  # type: ignore[override]
-        """Advertise the closed contract the runtime actually enforces."""
+        """Advertise exactly the contract the runtime enforces -- no more, no less."""
         tools = await super().list_tools()
         for t in tools:
             schema = getattr(t, "inputSchema", None)
-            # Only stamp object schemas that declare properties. Stamping a schema with no
-            # properties would advertise "accepts nothing", contradicting the call_tool rule
-            # above that treats an empty property set as unknown rather than closed.
-            # Stamp whenever "properties" is present -- including when empty, because an empty
-            # property set is now enforced as "accepts nothing" rather than "unknown".
+            # setdefault, NOT force: an author who set additionalProperties:true meant it (opt-out
+            # above), so leave it true and advertise open. Stamp false only when the key is absent.
+            # Skip a schema with no "properties" -- stamping "accepts nothing" there would
+            # contradict call_tool, which treats an absent property set as unknown, not closed.
+            # The invariant this preserves is ADVERTISEMENT == RUNTIME for every tool; pin that,
+            # never "true becomes false", or a proxy tool later fights its own conformance test.
             if isinstance(schema, dict) and schema.get("type") == "object" and "properties" in schema:
                 schema.setdefault("additionalProperties", False)
         return tools
@@ -87,7 +106,10 @@ class StrictArgsMCP(FastMCP):
 _MAX_ENUMERATED = 10
 
 
-def _unknown_args_message(name: str, unknown: list[str], accepted: set[str]) -> str:
+def _unknown_args_message(
+    name: str, unknown: list[str], accepted: set[str],
+    reconnect_hint: str = _DEFAULT_RECONNECT_HINT,
+) -> str:
     shown = unknown[:_MAX_ENUMERATED]
     more = len(unknown) - len(shown)
     listed = ", ".join(shown) + (f", and {more} more" if more > 0 else "")
@@ -116,6 +138,6 @@ def _unknown_args_message(name: str, unknown: list[str], accepted: set[str]) -> 
         parts.append("Note: " + "; ".join(hints) + ".")
     parts.append(
         "If you expected these arguments to work, this server process is probably running older "
-        "code than you think - check the server's reported revision and reconnect the MCP."
+        f"code than you think - {reconnect_hint}."
     )
     return " ".join(parts)
