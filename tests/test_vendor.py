@@ -75,3 +75,68 @@ def test_staleness_check_can_be_disabled_for_hash_only_use(tmp_path):
     f.write_text(render(version="0.0.9"))
     ok, _ = verify(f, check_stale=False)
     assert ok, "hash-only verification must still pass on an unmodified older copy"
+
+
+# ---- adversarial battery from the pack's Q1 attack (2026-08-29) --------------------------------
+
+import hashlib as _hl
+import re as _re
+
+from mcpkit.vendor import BODY_HASH_MARKER, audit
+
+
+def _rehash(t: str) -> str:
+    """What a competent tamperer does: recompute the self-describing whole-file hash."""
+    claimed = _re.search(_re.escape(BODY_HASH_MARKER) + r"([0-9a-f]{64})", t).group(1)
+    body = t.split("# mcpkit-policy-sha256: ", 1)[1].split("\n", 1)[1].lstrip("\n")
+    return t.replace(claimed, _hl.sha256(body.encode()).hexdigest())
+
+
+def test_smuggled_code_on_a_provenance_line_is_refused_even_with_a_fixed_hash(tmp_path):
+    """The demonstrated exploit: append executable Python to a provenance-shaped line, then
+    recompute the whole-file hash. A stripping (blacklist) verifier deleted the whole line before
+    hashing and VOUCHED for the file. The sentinel design refuses at the tail grammar instead —
+    and the refusal must not depend on the tamperer forgetting to fix the hash."""
+    evil = _re.sub(r'(__mcpkit_upstream_sha__ = "[0-9a-f]+(?:\+dirty)?")',
+                   r'\1; import os; SKIP = os.environ.get("SKIP_GUARD")', render(), count=1)
+    f = tmp_path / "m.py"
+    f.write_text(_rehash(evil))
+    ok, msg = verify(f)
+    assert not ok
+    assert "TAMPERED" in msg, f"must refuse via the grammar, not by luck: {msg[:120]}"
+
+
+def test_a_looks_but_not_exact_provenance_line_is_refused_not_normalised(tmp_path):
+    """Without the LOOKS-but-not-EXACT hard error, a tamperer reformats the line so it stops
+    matching and it silently becomes policy — the hash still catches drift, but nobody learns the
+    file was touched in a provenance slot. Two spaces instead of one is enough to test the anchor."""
+    reform = _re.sub(r'__mcpkit_upstream_sha__ = ("[0-9a-f]+(?:\+dirty)?")',
+                     r'__mcpkit_upstream_sha__  = \1', render(), count=1)
+    f = tmp_path / "m.py"
+    f.write_text(_rehash(reform))
+    ok, msg = verify(f)
+    assert not ok and "TAMPERED" in msg
+
+
+def test_provenance_only_rotation_is_OK_and_says_policy_identical(tmp_path):
+    """The wart this design exists to fix: an upstream commit that changes nothing behavioural
+    must NOT produce 'regenerate if that commit changed behaviour' — the machine now answers."""
+    f = tmp_path / "m.py"
+    f.write_text(render(code_sha="0000000"))
+    ok, msg = verify(f)
+    assert ok, msg
+    assert "policy" in msg.lower()
+
+
+def test_audit_is_silent_on_success_and_loud_on_a_missing_copy(tmp_path):
+    good = tmp_path / "a.py"
+    good.write_text(render())
+    manifest = tmp_path / "consumers.txt"
+    manifest.write_text(f"{good}\n")
+    ok, msgs = audit(manifest)
+    assert ok and len(msgs) == 1 and "1/1" in msgs[0]
+
+    manifest.write_text(f"{good}\n{tmp_path}/ghost.py\n")
+    ok, msgs = audit(manifest)
+    assert not ok
+    assert any("MISSING" in m for m in msgs)
