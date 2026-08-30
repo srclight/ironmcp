@@ -141,6 +141,49 @@ def test_schema_claim_matches_runtime_behaviour():
     assert state["entered"] == 0
 
 
+def test_advertisement_matches_runtime_for_a_passthrough_optout():
+    """The THIRD state. A tool that declares additionalProperties:true has OPTED OUT (a passthrough
+    accepting arbitrary keys). The catalog must keep 'true' AND the runtime must honour it -- the
+    invariant is ADVERTISEMENT == RUNTIME, not 'true always becomes false'. Pinning the latter would
+    cement the two-state model and fight a proxy tool when one arrives.
+    """
+    srv, state = _server()
+    # An author declaring the opt-out the JSON-Schema-standard way.
+    srv._tool_manager.get_tool("scoped_search").parameters = {
+        "type": "object", "properties": {"query": {"type": "string"}},
+        "additionalProperties": True,
+    }
+    # Catalog still advertises open...
+    tools = {t.name: t for t in asyncio.run(srv.list_tools())}
+    assert tools["scoped_search"].inputSchema.get("additionalProperties") is True
+    # ...and the runtime HONOURS it: an unknown key is accepted, not refused.
+    res = asyncio.run(srv.call_tool("scoped_search", {"query": "x", "anything": 1}))
+    assert res is not None
+    assert state["entered"] == 1
+
+
+def test_reconnect_hint_names_this_servers_revision_surface():
+    """The stale diagnosis is per-server DATA, not a hardcoded string. A server that knows how it
+    reports its revision supplies a better hint; the default stays generic."""
+    srv = StrictArgsMCP("named", reconnect_hint="run pack_status to see the running revision")
+
+    @srv.tool()
+    def only(query: str) -> str:
+        return query
+
+    with pytest.raises(ToolError) as e:
+        asyncio.run(srv.call_tool("only", {"query": "x", "bogus": 1}))
+    assert "run pack_status to see the running revision" in str(e.value)
+
+
+def test_default_reconnect_hint_is_used_when_unset():
+    srv, _ = _server()
+    with pytest.raises(ToolError) as e:
+        asyncio.run(srv.call_tool("scoped_search", {"query": "x", "bogus": 1}))
+    low = str(e.value).lower()
+    assert "revision" in low and "reconnect" in low
+
+
 def test_stamping_does_not_mutate_the_live_registry():
     """The advertised schema is stamped on the way OUT, not written back into the registry.
 

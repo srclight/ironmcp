@@ -27,8 +27,17 @@ import hashlib
 import re
 from pathlib import Path
 
-# Dependency order. seams and build import nothing internal; ops needs build; strict needs seams.
-_MODULES = ("seams", "build", "ops", "strict")
+# Dependency order. seams and build import nothing internal; ops needs build; strict needs seams;
+# conformance imports nothing internal (it operates on any mcp object) so it goes last.
+#
+# conformance ships INSIDE the hashed policy DELIBERATELY, not as a side effect. A vendored consumer
+# imports its guard from this one file and nothing else -- so for it to drop its own hand-written
+# "all tools are closed" test (the five that already drifted) and call the shared check instead, the
+# check must live here too. The consequence is honest: a change to the conformance CONTRACT registers
+# as a policy change under --check, and that is correct -- a consumer whose conformance bar moved
+# SHOULD re-vendor to get the new bar. If it ever churns faster than enforcement, split it into a
+# second vendored file then; not before.
+_MODULES = ("seams", "build", "ops", "strict", "conformance")
 # Relative imports may be INDENTED (ops.py imports __version__ inside a function), so the pattern
 # must allow leading whitespace. Missing that produced a flattened file with a live `from . import`
 # inside a function body -- syntactically fine, fatal at call time.

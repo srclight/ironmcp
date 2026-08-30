@@ -18,13 +18,15 @@ AND the copies have drifted. Not before.
 """
 
 from .build import code_sha, started_at, uptime_s
+from .conformance import aassert_enforces, assert_enforces
 from .ops import EX_CONFIG, attach_healthz, bearer_middleware, require_token_or_exit
 from .seams import LAST_KNOWN_GOOD, SeamError, verify_seams
 from .strict import StrictArgsMCP
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __all__ = [
     "StrictArgsMCP",
+    "assert_enforces", "aassert_enforces",
     "code_sha", "started_at", "uptime_s",
     "attach_healthz", "bearer_middleware", "require_token_or_exit", "EX_CONFIG",
     "SeamError", "verify_seams", "LAST_KNOWN_GOOD",

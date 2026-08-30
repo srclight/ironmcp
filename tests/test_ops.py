@@ -63,6 +63,16 @@ def test_bearer_rejects_missing_and_wrong_tokens():
         assert c.post("/mcp", json={}, headers={"Authorization": "Bearer secret-token"}).status_code != 401
 
 
+def test_401_carries_www_authenticate_so_a_client_knows_how_to_retry():
+    """The MCP OAuth flow expects WWW-Authenticate on the 401: it names the scheme, so a compliant
+    client learns HOW to authenticate, not merely THAT it failed."""
+    app = _app(token="secret-token")
+    with TestClient(app) as c:
+        r = c.post("/mcp", json={})
+    assert r.status_code == 401
+    assert r.headers.get("www-authenticate") == "Bearer"
+
+
 def test_healthz_stays_open_when_bearer_is_on():
     """By design: a restart script must verify what came up without holding a credential."""
     with TestClient(_app(token="secret-token")) as c:

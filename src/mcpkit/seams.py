@@ -11,6 +11,14 @@ server would advertise ``additionalProperties: false`` and accept extras.
 
 So the seams are checked once at import and the failure is an exception naming what moved. Louder
 than a wrong answer, and it happens at start-up rather than at the first mistyped argument.
+
+ONE FastMCP, NOT TWO. These seams are the shapes of the FastMCP BUNDLED IN THE OFFICIAL ``mcp`` SDK
+(``mcp.server.fastmcp``), pinned ``mcp>=1.28,<2``. They are NOT the shapes of the standalone
+PrefectHQ ``fastmcp`` v3 package (which vaultlight runs) -- there ``get_tool`` is public, middleware
+is first-class, and the internals mcpkit reaches into do not exist under these names. mcpkit does not
+work on fastmcp v3 as-is; adopting it there is a rewrite, not a config change. Written down here so
+nobody vendors this file into a v3 server and is surprised when the seam-check passes and enforcement
+still does not fit.
 """
 
 from __future__ import annotations
