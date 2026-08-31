@@ -1,0 +1,3 @@
+{ "id": "003-zero-arg-tool-rejects-extras",
+  "description": "a no-argument tool still refuses a typo (empty properties, not absent)",
+  "tool": "ping", "arguments": {"typo": 1}, "expect": "refuse" }

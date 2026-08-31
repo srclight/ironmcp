@@ -1,0 +1,4 @@
+{ "id": "001-unknown-arg-refused",
+  "description": "an undeclared argument is refused, not silently dropped",
+  "tool": "echo", "arguments": {"a": "x", "typo": "ignored"},
+  "expect": "refuse", "expect_message_contains": ["unknown argument", "Nothing was executed"] }
