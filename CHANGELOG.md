@@ -23,7 +23,7 @@ Package renamed **`mcpkit` → `ironmcp`** (flat, v2-only). The MCP v2 port, and
   every language.
 
 ### Changed
-- Floor is now `mcp>=2,<3`. The package imports lazily, so `import mcpkit` touches no SDK.
+- Renamed from `mcpkit`; now a flat, v2-only package (`import ironmcp`). Floor `mcp>=2,<3`.
   
 
 ## 0.2.1 and earlier
