@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from .conformance import aassert_enforces_v2, assert_enforces_v2
 from .corpus import Result, run_corpus
+from .health import code_sha, health_payload
 from .strict import StrictArgsMiddleware, strict_server
 
 __all__ = [
@@ -17,4 +18,6 @@ __all__ = [
     "aassert_enforces_v2",
     "run_corpus",
     "Result",
+    "code_sha",
+    "health_payload",
 ]
