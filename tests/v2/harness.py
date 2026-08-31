@@ -31,6 +31,13 @@ def build_probe_server(server: MCPServer | None = None) -> MCPServer:
     return srv
 
 
+def build_strict_server() -> MCPServer:
+    """A probe server guarded by StrictArgsMiddleware (echo + ping registered)."""
+    from mcpkit.v2 import strict_server
+
+    return build_probe_server(strict_server(name="probe", version="0.0.0"))
+
+
 async def _in_session(server: MCPServer, fn):
     ll = server._lowlevel_server
     async with create_client_server_memory_streams() as ((cr, cw), (sr, sw)):
