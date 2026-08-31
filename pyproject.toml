@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mcpkit"
+version = "0.2.1"
+description = "Shared MCP server policy for the Loqu8/Srclight/Gig8 estate. Policy, not capability: it ships no tools."
+requires-python = ">=3.11"
+# starlette is used DIRECTLY by ops.py (JSONResponse, BaseHTTPMiddleware) and arrives transitively
+# through mcp today -- but a direct import is a direct dependency, and pinning it here means an mcp
+# release that dropped starlette would fail at install, loudly, instead of at first /healthz request.
+dependencies = ["mcp>=1.28,<2", "starlette"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcpkit"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Every one of these closes a failure this estate actually shipped:
+#   --strict-markers  an unknown @pytest.mark silently does nothing (bit us 2026-08-29)
+#   --strict-config   a typo'd ini key is ignored rather than raised
+#   xfail_strict      an xfail that passes is a lie about coverage
+#   filterwarnings    a DeprecationWarning is how a silent behaviour change arrives
+addopts = "--strict-markers --strict-config -ra"
+xfail_strict = true
+filterwarnings = [
+    "error",
+    # anyio's MemoryObjectReceiveStream finalizer emits an unraisable warning when Starlette's
+    # TestClient tears a session down. It comes from library cleanup, not from mcpkit, and it
+    # fires after the assertions have already run. Narrowly ignored rather than dropping
+    # "error" wholesale -- the point of erroring on warnings is lost the moment it is broadened.
+    "ignore::pytest.PytestUnraisableExceptionWarning",
+]
