@@ -4,10 +4,10 @@ import pathlib
 
 import pytest
 
-from mcpkit.v2.corpus import run_corpus
-from tests.v2.harness import build_probe_server, build_strict_server
+from ironmcp.corpus import run_corpus
+from tests.harness import build_probe_server, build_strict_server
 
-CASES = pathlib.Path(__file__).resolve().parents[2] / "conformance" / "cases"
+CASES = pathlib.Path(__file__).resolve().parents[1] / "conformance" / "cases"
 
 
 @pytest.mark.asyncio

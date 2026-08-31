@@ -10,7 +10,7 @@ import anyio
 from mcp.client.session import ClientSession
 from mcp.shared.memory import create_client_server_memory_streams
 
-from mcpkit.v2 import aassert_enforces_v2, health_payload, strict_server
+from ironmcp import aassert_enforces_v2, health_payload, strict_server
 
 
 # --- a real server, the way a consumer writes one -------------------------------------

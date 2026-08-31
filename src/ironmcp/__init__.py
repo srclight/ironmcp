@@ -1,7 +1,9 @@
-"""ironmcp v2 — the strict-args guarantee as an MCP v2 ServerMiddleware.
+"""ironmcp - the hardening & conformance standard for MCP servers (Python kit).
 
-Targets ``mcp>=2`` (MCPServer + ServerMiddleware). See ``docs/v2-contract.md`` for the
-verified SDK contract this is built against.
+The strict-args guarantee as an MCP v2 ``ServerMiddleware`` (refuse unknown tool
+arguments instead of silently dropping them; advertise exactly what you enforce), plus
+the conformance corpus, agent-interrogable health, and fail-closed bearer auth. Targets
+``mcp>=2``. The behavioural contract is in ``spec/``; it is executable as ``conformance/``.
 """
 
 from __future__ import annotations
@@ -12,6 +14,7 @@ from .corpus import Result, run_corpus
 from .health import code_sha, health_payload
 from .strict import StrictArgsMiddleware, strict_server
 
+__version__ = "0.3.0"
 __all__ = [
     "StrictArgsMiddleware",
     "strict_server",

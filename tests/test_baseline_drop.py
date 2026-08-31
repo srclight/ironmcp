@@ -3,7 +3,7 @@ real client session. This is the bug the port removes; the test documents it."""
 
 import pytest
 
-from tests.v2.harness import build_probe_server, result_text, session_call
+from tests.harness import build_probe_server, result_text, session_call
 
 
 @pytest.mark.asyncio

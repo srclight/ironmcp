@@ -3,7 +3,7 @@ a bare server advertises nothing (the silent catalog the guard exists to close).
 
 import pytest
 
-from tests.v2.harness import build_probe_server, build_strict_server, session_list_tools
+from tests.harness import build_probe_server, build_strict_server, session_list_tools
 
 
 @pytest.mark.asyncio

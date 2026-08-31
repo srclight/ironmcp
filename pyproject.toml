@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mcpkit"
+name = "ironmcp"
 version = "0.3.0"
-description = "Shared MCP server policy for the Loqu8/Srclight/Gig8 estate. Policy, not capability: it ships no tools."
+description = "The hardening & conformance standard for MCP servers. Strict args, conformance corpus, native per language."
 requires-python = ">=3.11"
 # starlette is used DIRECTLY by ops.py (JSONResponse, BaseHTTPMiddleware) and arrives transitively
 # through mcp today -- but a direct import is a direct dependency, and pinning it here means an mcp
@@ -16,7 +16,7 @@ dependencies = ["mcp>=2,<3", "starlette"]
 dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mcpkit"]
+packages = ["src/ironmcp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -3,7 +3,7 @@ additionalProperties:true opt-out, and lets declared args pass."""
 
 import pytest
 
-from tests.v2.harness import build_strict_server, result_text, session_call
+from tests.harness import build_strict_server, result_text, session_call
 
 
 @pytest.mark.asyncio

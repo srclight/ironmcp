@@ -1,4 +1,4 @@
-"""The unknown-argument refusal message. Copied from v1 ``mcpkit/strict.py`` and kept
+"""The unknown-argument refusal message. Copied from the v1 kit's strict module and kept
 free of any ``mcp`` import so it loads cleanly under ``mcp>=2`` (where FastMCP is a
 tombstone). Behavior is identical to v1 and is pinned by the conformance corpus.
 """

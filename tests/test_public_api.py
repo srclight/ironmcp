@@ -2,7 +2,7 @@
 
 
 def test_v2_public_api_imports():
-    from mcpkit.v2 import (  # noqa: F401
+    from ironmcp import (  # noqa: F401
         Result,
         StrictArgsMiddleware,
         aassert_enforces_v2,
@@ -16,17 +16,17 @@ def test_v2_public_api_imports():
 
 
 def test_v2_names_reachable_from_top_level_lazily():
-    import mcpkit
+    import ironmcp
 
     for name in ("StrictArgsMiddleware", "strict_server", "aassert_enforces_v2",
                  "run_corpus", "health_payload", "make_bearer_asgi"):
-        assert getattr(mcpkit, name) is not None
+        assert getattr(ironmcp, name) is not None
 
 
 def test_spec_and_corpus_present():
     import pathlib
 
-    root = pathlib.Path(__file__).resolve().parents[2]
+    root = pathlib.Path(__file__).resolve().parents[1]
     assert (root / "spec" / "strict-args.md").is_file()
     assert (root / "spec" / "conformance.md").is_file()
     assert list((root / "conformance" / "cases").glob("*.json"))

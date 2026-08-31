@@ -7,7 +7,7 @@ from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
 
-from mcpkit.v2.auth import make_bearer_asgi
+from ironmcp.auth import make_bearer_asgi
 
 TOKEN = "s3cret-token-value"
 

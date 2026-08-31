@@ -1,6 +1,6 @@
 """code_sha never raises; health_payload is honest and complete."""
 
-from mcpkit.v2.health import code_sha, health_payload
+from ironmcp.health import code_sha, health_payload
 
 
 def test_code_sha_returns_str_and_never_raises():
