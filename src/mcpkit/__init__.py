@@ -25,6 +25,10 @@ _LAZY = {
     "strict_server": ".v2",
     "assert_enforces_v2": ".v2",
     "aassert_enforces_v2": ".v2",
+    "run_corpus": ".v2",
+    "code_sha_v2": ".v2",
+    "health_payload": ".v2",
+    "make_bearer_asgi": ".v2",
     # v1 (mcp<2): the FastMCP-subclass policy
     "StrictArgsMCP": ".strict",
     "assert_enforces": ".conformance",

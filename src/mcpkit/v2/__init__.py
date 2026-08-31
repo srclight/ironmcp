@@ -6,6 +6,7 @@ verified SDK contract this is built against.
 
 from __future__ import annotations
 
+from .auth import make_bearer_asgi
 from .conformance import aassert_enforces_v2, assert_enforces_v2
 from .corpus import Result, run_corpus
 from .health import code_sha, health_payload
@@ -20,4 +21,5 @@ __all__ = [
     "Result",
     "code_sha",
     "health_payload",
+    "make_bearer_asgi",
 ]
