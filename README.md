@@ -30,7 +30,9 @@ bug a day earlier. Argument validation is something every MCP server must supply
 ```python
 from mcpkit import StrictArgsMCP, attach_healthz, bearer_middleware, require_token_or_exit
 
-mcp = StrictArgsMCP("myserver")          # instead of FastMCP("myserver")
+# reconnect_hint names how THIS server reports its running revision, so the stale-server
+# diagnosis in a refusal points somewhere real. Optional; a generic default is used if omitted.
+mcp = StrictArgsMCP("myserver", reconnect_hint="call the status tool to see the running revision")
 
 @mcp.tool()
 def search(query: str, project: str | None = None) -> dict: ...
@@ -43,15 +45,41 @@ app = mcp.streamable_http_app()
 app.add_middleware(bearer_middleware(os.environ["MYSERVER_TOKEN"]))
 ```
 
+Pin one test that the guard is actually live (one line; replaces the hand-written conformance test every consumer used to copy):
+
+```python
+from mcpkit import assert_enforces
+
+def test_every_tool_is_guarded():
+    assert_enforces(mcp)     # raises if any tool advertises a contract the runtime does not keep
+```
+
 ## What it provides
 
 | | |
 |---|---|
-| `StrictArgsMCP` | refuses unknown args (`ToolError`) **and** stamps `additionalProperties: false` on advertised schemas — both halves, because runtime-only leaves the catalog lying |
+| `StrictArgsMCP` | refuses unknown args (`ToolError`) **and** stamps `additionalProperties: false` on advertised schemas — both halves, because runtime-only leaves the catalog lying. A tool that declares `additionalProperties: true` has opted OUT (a passthrough accepting arbitrary keys) and is honoured, not overridden. `reconnect_hint=` sets the per-server stale diagnosis |
+| `assert_enforces(mcp)` | one-call conformance check for a test suite: asserts **advertisement == runtime** for every tool, and is proven to *fire* against a bare FastMCP. `aassert_enforces` is the async form |
 | `code_sha()` | revision stamped once at import; `None` is honest. A long-lived daemon serves the code it launched with |
-| `attach_healthz()` | **session-free** GET endpoint. A health check inside the MCP session cannot report that the session is the broken thing |
-| `bearer_middleware()` | constant-time bearer check, `/healthz` exempt so a restart script can verify without a credential |
+| `attach_healthz()` | **session-free** GET endpoint reporting `code_sha` and `mcpkit_version`. A health check inside the MCP session cannot report that the session is the broken thing |
+| `bearer_middleware()` | constant-time bearer check with `WWW-Authenticate: Bearer` on the 401; `/healthz` exempt so a restart script can verify without a credential |
 | `require_token_or_exit()` | fail-closed on the deployed path, exit **78** (`EX_CONFIG`) to pair with systemd `RestartPreventExitStatus=78` |
+
+## For AI agents calling a guarded server
+
+If a tool call comes back with **`unknown argument(s): … running older code than you think`**, the arguments you sent are not wrong in general — this *particular server process* does not implement them. A long-lived MCP daemon serves the code it was launched with, so a field added since it started is unknown to it. **Nothing ran and no result was computed.** Check the server's reported revision (the `reconnect_hint` in the message names how) and ask the user to reconnect the MCP; do not retry with the same arguments against the same process. Refusal is deliberate: bare FastMCP would have dropped the field silently and answered a question you did not ask.
+
+## Adopting it (vendor, don't depend — yet)
+
+mcpkit is not on PyPI. A consumer **vendors** one self-contained file and imports from it, so public and private repos adopt the same policy identically and no repo gains an unresolvable dependency:
+
+```bash
+python -m mcpkit.vendor --out path/to/_mcpkit.py    # generate the single-file build
+python -m mcpkit.vendor --check path/to/_mcpkit.py  # verify it is unmodified, untampered, current
+python -m mcpkit.vendor --audit                     # verify EVERY copy in consumers.txt (add yours!)
+```
+
+The generated file carries a whole-file hash, a separate **policy hash**, its version and upstream sha, so a hand-edited or stale copy is caught mechanically. An unlisted copy is invisible to `--audit` — add your path to `consumers.txt` when you vendor.
 
 ## Deliberately excluded — the exclusions are the design
 
