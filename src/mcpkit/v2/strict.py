@@ -36,7 +36,29 @@ class StrictArgsMiddleware(ServerMiddleware):
         self._reconnect_hint = reconnect_hint or _DEFAULT_RECONNECT_HINT
 
     async def __call__(self, ctx, call_next):
-        if getattr(ctx, "method", None) == "tools/call" and ctx.params and self._server is not None:
+        method = getattr(ctx, "method", None)
+
+        if method == "tools/list":
+            # Advertise exactly the contract the runtime enforces. setdefault, NOT force:
+            # a tool that opted itself open (additionalProperties:true) stays open. Skip a
+            # schema with no "properties" -- stamping "accepts nothing" there would contradict
+            # the runtime, which treats an absent property set as permissive. The invariant is
+            # ADVERTISEMENT == RUNTIME.
+            # The result is a serialized dict {"tools": [{"inputSchema": {...}}, ...]} with WIRE
+            # (camelCase) keys; a BaseModel form is handled too for robustness.
+            result = await call_next(ctx)
+            tools = result.get("tools") if isinstance(result, dict) else getattr(result, "tools", None)
+            for tool in tools or []:
+                schema = tool.get("inputSchema") if isinstance(tool, dict) else getattr(tool, "input_schema", None)
+                if (
+                    isinstance(schema, dict)
+                    and schema.get("type") == "object"
+                    and "properties" in schema
+                ):
+                    schema.setdefault("additionalProperties", False)
+            return result
+
+        if method == "tools/call" and ctx.params and self._server is not None:
             name = ctx.params.get("name")
             arguments = ctx.params.get("arguments") or {}
             tool = self._server._tool_manager.get_tool(name) if name else None
