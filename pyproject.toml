@@ -3,23 +3,25 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mcpkit"
-version = "0.2.1"
-description = "Shared MCP server policy for the Loqu8/Srclight/Gig8 estate. Policy, not capability: it ships no tools."
+name = "ironmcp"
+version = "0.3.0"
+description = "The hardening & conformance standard for MCP servers. Strict args, conformance corpus, native per language."
+readme = "README.md"
 requires-python = ">=3.11"
 # starlette is used DIRECTLY by ops.py (JSONResponse, BaseHTTPMiddleware) and arrives transitively
 # through mcp today -- but a direct import is a direct dependency, and pinning it here means an mcp
 # release that dropped starlette would fail at install, loudly, instead of at first /healthz request.
-dependencies = ["mcp>=1.28,<2", "starlette"]
+dependencies = ["mcp>=2,<3", "starlette"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mcpkit"]
+packages = ["src/ironmcp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_mode = "auto"
 # Every one of these closes a failure this estate actually shipped:
 #   --strict-markers  an unknown @pytest.mark silently does nothing (bit us 2026-08-29)
 #   --strict-config   a typo'd ini key is ignored rather than raised

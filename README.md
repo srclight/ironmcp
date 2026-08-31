@@ -1,116 +1,68 @@
-# mcpkit
+# ironmcp
 
-Shared MCP server **policy** for the Loqu8 / Srclight / Gig8 estate.
+**The hardening & conformance standard for MCP servers.** Dedicated, hardened,
+conformant MCP tooling on every platform — so nobody hand-rolls JSON-RPC again.
 
-**It ships no tools, deliberately.** It constrains how your tools behave; it does not give you
-capabilities. (`loqu8-dart`'s `McpServiceBase` is the opposite kind of base class — it inherits
-apps working tools like screenshot and window control. Merging the two is how a shared library
-becomes a framework nobody can change.)
+`ironmcp` is a policy layer for [Model Context Protocol](https://modelcontextprotocol.io)
+servers. It ships **no tools** — it constrains how *your* tools behave. The Python kit
+targets `mcp>=2`.
 
-## Why it exists
+## The problem it fixes
 
-On 2026-08-28, six MCP servers were found to share one SDK default: FastMCP silently discards
-unknown tool arguments *before* the tool function is entered. On srclight that produced confidently
-wrong answers:
+Most MCP SDKs **silently drop** any argument a tool doesn't declare, before the tool
+runs — no error, no signal. One added letter (`project` → `projects`) yields a genuine
+answer to a question nobody asked, with no way for the caller to learn their constraint
+was ignored. `ironmcp` refuses the unknown argument instead, and advertises that it does.
 
-```
-search_symbols(query="main", project="zhcorpus")    -> 20 hits, all zhcorpus
-search_symbols(query="main", projects="zhcorpus")   -> 20 hits, ZERO zhcorpus
-                                                       (19 bible, 1 bank-scraper)
-```
-
-One added letter. No error, identical hit count, identical shape, real symbols — from repos the
-caller never asked about. Not a lossy call: a **wrong** one.
-
-It is not a Python problem. scarlight (TypeScript SDK, low-level `Server` path) hit the identical
-bug a day earlier. Argument validation is something every MCP server must supply for itself.
-
-## Use
+## Quick start
 
 ```python
-from mcpkit import StrictArgsMCP, attach_healthz, bearer_middleware, require_token_or_exit
+from ironmcp import strict_server
 
-# reconnect_hint names how THIS server reports its running revision, so the stale-server
-# diagnosis in a refusal points somewhere real. Optional; a generic default is used if omitted.
-mcp = StrictArgsMCP("myserver", reconnect_hint="call the status tool to see the running revision")
+app = strict_server(name="my-server", version="1.0.0")
 
-@mcp.tool()
-def search(query: str, project: str | None = None) -> dict: ...
-
-attach_healthz(mcp, name="myserver")     # session-free GET /healthz, opt-in
-
-# In the DEPLOYED entry point only — the library default stays permissive so tests are unaffected:
-require_token_or_exit(os.environ.get("MYSERVER_TOKEN"), transport="streamable-http", service="myserver")
-app = mcp.streamable_http_app()
-app.add_middleware(bearer_middleware(os.environ["MYSERVER_TOKEN"]))
+@app.tool()
+async def search(query: str, limit: int = 20) -> str:
+    ...
 ```
 
-Pin one test that the guard is actually live (one line; replaces the hand-written conformance test every consumer used to copy):
+Now `search(query="x", projekt="y")` comes back as an **error result**
+("unknown argument(s): projekt … Nothing was executed"), instead of silently running
+with `projekt` dropped. The advertised schema carries `additionalProperties: false`, so
+agents are told the truth — **advertisement == runtime**. A tool that sets
+`additionalProperties: true` opts out and accepts arbitrary keys.
+
+## Conformance — the guarantee is provable
 
 ```python
-from mcpkit import assert_enforces
+from ironmcp import aassert_enforces_v2, run_corpus
 
-def test_every_tool_is_guarded():
-    assert_enforces(mcp)     # raises if any tool advertises a contract the runtime does not keep
+await aassert_enforces_v2(app)                         # every tool: advertisement == runtime
+results = await run_corpus(app, "conformance/cases")   # the language-neutral corpus
+assert all(r.passed for r in results)
 ```
 
-## What it provides
+The behavioural contract lives in [`spec/`](spec/), executable as
+[`conformance/`](conformance/) — a JSON corpus owned by no language. A kit in *any*
+language conforms when a server built with its strict layer passes the same cases. That
+is what makes "the same guarantee everywhere" provable rather than claimed.
 
-| | |
-|---|---|
-| `StrictArgsMCP` | refuses unknown args (`ToolError`) **and** stamps `additionalProperties: false` on advertised schemas — both halves, because runtime-only leaves the catalog lying. A tool that declares `additionalProperties: true` has opted OUT (a passthrough accepting arbitrary keys) and is honoured, not overridden. `reconnect_hint=` sets the per-server stale diagnosis |
-| `assert_enforces(mcp)` | one-call conformance check for a test suite: asserts **advertisement == runtime** for every tool, and is proven to *fire* against a bare FastMCP. `aassert_enforces` is the async form |
-| `code_sha()` | revision stamped once at import; `None` is honest. A long-lived daemon serves the code it launched with |
-| `attach_healthz()` | **session-free** GET endpoint reporting `code_sha` and `mcpkit_version`. A health check inside the MCP session cannot report that the session is the broken thing |
-| `bearer_middleware()` | constant-time bearer check with `WWW-Authenticate: Bearer` on the 401; `/healthz` exempt so a restart script can verify without a credential |
-| `require_token_or_exit()` | fail-closed on the deployed path, exit **78** (`EX_CONFIG`) to pair with systemd `RestartPreventExitStatus=78` |
+## Also included
 
-## For AI agents calling a guarded server
+- `health_payload(name, version)` / `code_sha()` — agent-interrogable liveness (an agent
+  learns *what* a server is and *whether it is current* without asking a human).
+- `make_bearer_asgi(app, expected_token=...)` — fail-closed bearer auth (401 +
+  `WWW-Authenticate`) to wrap `app.streamable_http_app()`.
 
-If a tool call comes back with **`unknown argument(s): … running older code than you think`**, the arguments you sent are not wrong in general — this *particular server process* does not implement them. A long-lived MCP daemon serves the code it was launched with, so a field added since it started is unknown to it. **Nothing ran and no result was computed.** Check the server's reported revision (the `reconnect_hint` in the message names how) and ask the user to reconnect the MCP; do not retry with the same arguments against the same process. Refusal is deliberate: bare FastMCP would have dropped the field silently and answered a question you did not ask.
+## API
 
-## Adopting it (vendor, don't depend — yet)
+`from ironmcp import` — `strict_server`, `StrictArgsMiddleware`, `assert_enforces_v2`,
+`aassert_enforces_v2`, `run_corpus`, `Result`, `health_payload`, `code_sha`,
+`make_bearer_asgi`.
 
-mcpkit is not on PyPI. A consumer **vendors** one self-contained file and imports from it, so public and private repos adopt the same policy identically and no repo gains an unresolvable dependency:
+See [`examples/demo.py`](examples/demo.py) for a runnable server that proves the
+guarantee end to end.
 
-```bash
-python -m mcpkit.vendor --out path/to/_mcpkit.py    # generate the single-file build
-python -m mcpkit.vendor --check path/to/_mcpkit.py  # verify it is unmodified, untampered, current
-python -m mcpkit.vendor --audit                     # verify EVERY copy in consumers.txt (add yours!)
-```
+## License
 
-The generated file carries a whole-file hash, a separate **policy hash**, its version and upstream sha, so a hand-edited or stale copy is caught mechanically. An unlisted copy is invisible to `--audit` — add your path to `consumers.txt` when you vendor.
-
-## Deliberately excluded — the exclusions are the design
-
-JSON-RPC/HTTP/SSE transport (FastMCP + Starlette already do it) · per-query timeouts (budgets are
-per-server; a shared decorator makes timeout policy an estate-wide release) · typed absence /
-`empty_reason` (the reasons are domain vocabulary) · tool registration · DI · logging · metrics ·
-restart scripts · OAuth.
-
-**Addition rule:** a helper enters this package only once it is already copy-pasted into **three**
-servers *and* the copies have drifted.
-
-## Tests
-
-```bash
-PYTHONPATH=src python -m pytest
-```
-
-The suite is built so it cannot pass without executing:
-
-- **Execution sentinels** — a refused call asserts `entered == 0`, proving the body never ran. An
-  error alone is not proof.
-- **Schema-only tests are banned** — asserting `additionalProperties is False` without calling the
-  tool is the discarded-argument bug in test form.
-- **Raw-wire tests** send literal JSON-RPC, not SDK client calls, so what is asserted is what a
-  caller receives.
-- **`tests/conftest.py` fails the run on an unexplained skip.** A skip must name an issue URL. Three
-  tests once reported green without running because a decorator was silently re-parented.
-- `--strict-markers --strict-config`, `xfail_strict`, warnings-as-errors.
-
-## Background
-
-`Vault/Projects/mcp-chassis/` (research, external reviews, claim verification) ·
-`Vault/Areas/AI Agents/agent-engineering-learnings.md` (the discipline) ·
-`Vault/Areas/AI Agents/mcp-port-registry.md` (addresses).
+Apache-2.0. By [Srclight](https://srclight.dev).
