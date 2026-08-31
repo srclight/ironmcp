@@ -1,0 +1,4 @@
+{ "id": "004-values-not-echoed",
+  "description": "the refusal names the offending key but never echoes its value",
+  "tool": "echo", "arguments": {"a": "x", "secret": "SENTINEL_VALUE_9f3a"},
+  "expect": "refuse", "expect_message_excludes": ["SENTINEL_VALUE_9f3a"] }
