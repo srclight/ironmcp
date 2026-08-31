@@ -23,6 +23,8 @@ _LAZY = {
     # v2 (mcp>=2): the ServerMiddleware policy
     "StrictArgsMiddleware": ".v2",
     "strict_server": ".v2",
+    "assert_enforces_v2": ".v2",
+    "aassert_enforces_v2": ".v2",
     # v1 (mcp<2): the FastMCP-subclass policy
     "StrictArgsMCP": ".strict",
     "assert_enforces": ".conformance",

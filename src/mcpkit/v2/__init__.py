@@ -6,6 +6,12 @@ verified SDK contract this is built against.
 
 from __future__ import annotations
 
+from .conformance import aassert_enforces_v2, assert_enforces_v2
 from .strict import StrictArgsMiddleware, strict_server
 
-__all__ = ["StrictArgsMiddleware", "strict_server"]
+__all__ = [
+    "StrictArgsMiddleware",
+    "strict_server",
+    "assert_enforces_v2",
+    "aassert_enforces_v2",
+]
