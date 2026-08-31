@@ -114,3 +114,56 @@ The suite is built so it cannot pass without executing:
 `Vault/Projects/mcp-chassis/` (research, external reviews, claim verification) ·
 `Vault/Areas/AI Agents/agent-engineering-learnings.md` (the discipline) ·
 `Vault/Areas/AI Agents/mcp-port-registry.md` (addresses).
+
+---
+
+## v2 (mcp >= 2) — `mcpkit.v2`
+
+MCP v2 removed FastMCP. The strict-args guarantee is now a **`ServerMiddleware` you
+attach**, not a base class you inherit:
+
+```python
+from mcpkit.v2 import strict_server
+
+srv = strict_server(name="my-server", version="1.0.0")
+
+@srv.tool()
+async def search(query: str, limit: int = 20) -> str:
+    ...
+```
+
+`search(query="x", projekt="y")` — a typo'd argument — now comes back as an **error
+result** ("unknown argument(s): projekt … Nothing was executed"), instead of silently
+running with `projekt` dropped. The listed schema advertises `additionalProperties:
+false`, so agents are told the truth (advertisement == runtime). A tool that sets
+`additionalProperties: true` opts out and accepts arbitrary keys.
+
+### Conformance
+
+```python
+from mcpkit.v2 import aassert_enforces_v2, run_corpus
+
+await aassert_enforces_v2(srv)                 # every tool: advertisement == runtime
+results = await run_corpus(srv, "conformance/cases")   # the language-neutral corpus
+assert all(r.passed for r in results)
+```
+
+The behavioural contract is spec'd in [`spec/`](spec/) and executable as
+[`conformance/`](conformance/) — the seed of ironmcp kits in every language.
+
+### Also in `mcpkit.v2`
+
+- `health_payload(name, version)` / `code_sha()` — agent-interrogable liveness.
+- `make_bearer_asgi(app, expected_token=...)` — fail-closed bearer auth (401 +
+  `WWW-Authenticate`) to wrap `srv.streamable_http_app()`.
+
+### Migrating from v1
+
+| v1 (`mcp<2`) | v2 (`mcp>=2`) |
+|---|---|
+| `StrictArgsMCP(...)` subclass | `strict_server(...)` / `StrictArgsMiddleware` attached |
+| `assert_enforces(mcp)` | `aassert_enforces_v2(server)` |
+| `attach_healthz` / `bearer_middleware` | `health_payload` / `make_bearer_asgi` |
+
+The two SDK majors cannot co-exist in one interpreter; `import mcpkit` is lazy, so it
+works under either. Pick the `mcp` major your server targets.
