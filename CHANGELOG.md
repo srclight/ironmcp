@@ -2,10 +2,10 @@
 
 ## 0.3.0 — 2026-08-31
 
-The MCP **v2** port, and the seed of ironmcp-the-standard.
+Package renamed **`mcpkit` → `ironmcp`** (flat, v2-only). The MCP v2 port, and the seed of ironmcp-the-standard.
 
 ### Added
-- **`mcpkit.v2`** — the strict-args guarantee as an MCP v2 `ServerMiddleware`
+- **`ironmcp`** — the strict-args guarantee as an MCP v2 `ServerMiddleware`
   (`mcp>=2`). Attach it, don't subclass:
   - `strict_server(name=..., version=...)` — an `MCPServer` guarded by
     `StrictArgsMiddleware`; refuses unknown tool arguments (never silently drops them)
@@ -24,8 +24,7 @@ The MCP **v2** port, and the seed of ironmcp-the-standard.
 
 ### Changed
 - Floor is now `mcp>=2,<3`. The package imports lazily, so `import mcpkit` touches no SDK.
-- The v1 `StrictArgsMCP` (FastMCP subclass, `mcp<2`) remains in the top-level modules but
-  is not loadable alongside v2 (the two SDK majors cannot co-exist in one interpreter).
+  
 
 ## 0.2.1 and earlier
 

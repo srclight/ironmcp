@@ -33,8 +33,8 @@ Every runner builds a server, guarded by its strict layer, exposing at least:
 
 ## How to run it (per language)
 
-- **Python** (this repo): `mcpkit.v2.corpus.run_corpus(server, "conformance/cases")` returns a
-  `list[Result]`; a conforming server yields zero failures. See `tests/v2/test_corpus.py`.
+- **Python** (this repo): `ironmcp.corpus.run_corpus(server, "conformance/cases")` returns a
+  `list[Result]`; a conforming server yields zero failures. See `tests/test_corpus.py`.
 - **Other kits**: reimplement a runner that reads these JSON files and drives its own
   in-process server the way a real client would. Same cases, same verdicts.
 
