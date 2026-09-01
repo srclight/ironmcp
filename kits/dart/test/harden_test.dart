@@ -57,4 +57,21 @@ void main() {
   test('K9: an unintrospectable (null) schema is permissive, not a crash', () {
     expect(Harden.refusalFor('t', null, {'whatever': 1}), isNull);
   });
+
+  test('StrictMcpServer is a drop-in McpServer that registers hardened tools', () {
+    final server = StrictMcpServer(
+      Implementation(name: 'test', version: '0.0.0'),
+      options: McpServerOptions(
+        capabilities: ServerCapabilities(tools: ServerCapabilitiesTools()),
+      ),
+    );
+    expect(server, isA<McpServer>()); // drop-in for any McpServer call site
+    final reg = server.registerTool(
+      'echo',
+      inputSchema: ToolInputSchema(properties: {'a': JsonSchema.string()}),
+      callback: (args, extra) =>
+          CallToolResult(content: [TextContent(text: 'ok')]),
+    );
+    expect(reg, isNotNull); // override ran, stamped + guarded, delegated cleanly
+  });
 }

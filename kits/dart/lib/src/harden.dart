@@ -102,3 +102,47 @@ class HardenedServer {
 HardenedServer harden(McpServer server,
         {String reconnectHint = Messages.defaultReconnectHint}) =>
     HardenedServer(server, reconnectHint: reconnectHint);
+
+/// A drop-in [McpServer] subclass: every tool registered through it is hardened
+/// (schema advertised closed, undeclared args refused) with NO call-site changes.
+/// Existing code that builds an `McpServer(info, options: …)` and calls
+/// `server.registerTool(...)` — e.g. loqu8's `McpServiceBase` and its
+/// `registerMcpTools(server, …)` — adopts advertisement==runtime by swapping the
+/// one constructor `McpServer(...)` → `StrictMcpServer(...)`. Use [HardenedServer]
+/// instead where you own the call sites and prefer composition over subclassing.
+class StrictMcpServer extends McpServer {
+  StrictMcpServer(
+    super.serverInfo, {
+    super.options,
+    this.reconnectHint = Messages.defaultReconnectHint,
+  });
+
+  final String reconnectHint;
+
+  @override
+  RegisteredTool registerTool(
+    String name, {
+    String? title,
+    String? description,
+    ToolInputSchema? inputSchema,
+    ToolOutputSchema? outputSchema,
+    ToolAnnotations? annotations,
+    Map<String, dynamic>? meta,
+    required ToolFunction callback,
+  }) {
+    return super.registerTool(
+      name,
+      title: title,
+      description: description,
+      inputSchema: Harden.stamp(inputSchema),
+      outputSchema: outputSchema,
+      annotations: annotations,
+      meta: meta,
+      callback: (args, extra) {
+        final refusal =
+            Harden.refusalFor(name, inputSchema, args, reconnectHint: reconnectHint);
+        return refusal ?? callback(args, extra);
+      },
+    );
+  }
+}
