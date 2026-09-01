@@ -2,7 +2,7 @@
 // it expects; it never throws (a health probe that can crash is not a health probe).
 import { createHash } from "node:crypto";
 
-export const IRONMCP_VERSION = "0.1.0";
+export const IRONMCP_VERSION = "0.2.0";
 
 export function codeSha(): string {
   try {
