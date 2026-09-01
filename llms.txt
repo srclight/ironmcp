@@ -1,0 +1,24 @@
+# ironmcp
+
+> The hardening and conformance standard for MCP servers: tool servers that refuse unknown
+> arguments instead of silently dropping them, and advertise exactly what they enforce. One
+> contract, one language-neutral conformance corpus, a native kit per language.
+
+## Start here
+
+- [AGENTS.md](AGENTS.md): the fast path for an AI agent — harden, serve, and prove conformance in copy-paste blocks.
+- [README.md](README.md): the human overview — what ironmcp is, before/after, the kits.
+- [ROADMAP.md](ROADMAP.md): the technical direction — kits, what has landed, what is next.
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to contribute, including the recipe for adding a language kit.
+
+## Spec and conformance
+
+- [spec/strict-args.md](spec/strict-args.md): the rule — refuse unknown tool arguments; the 3-state contract and the refusal message.
+- [spec/conformance.md](spec/conformance.md): what a conforming server must satisfy.
+- [conformance/README.md](conformance/README.md): the corpus format and how to run it per language.
+- [conformance/cases](conformance/cases): the language-neutral test cases, owned by no language.
+
+## Kits
+
+- [kits/python/README.md](kits/python/README.md): the Python kit (`pip install ironmcp`), targets mcp>=2.
+- [kits/typescript/README.md](kits/typescript/README.md): the TypeScript kit (`npm install ironmcp`), on the official SDK.
