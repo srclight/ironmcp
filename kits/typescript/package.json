@@ -1,0 +1,51 @@
+{
+  "name": "ironmcp",
+  "version": "0.1.0",
+  "description": "MCP servers that refuse unknown arguments instead of silently dropping them — advertisement == runtime.",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "sideEffects": false,
+  "files": ["dist"],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "mcp-server",
+    "conformance",
+    "hardening",
+    "zod",
+    "tool-validation",
+    "additionalProperties",
+    "strict"
+  ],
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": ">=1.20 <3",
+    "zod": ">=3 <5"
+  },
+  "peerDependenciesMeta": {
+    "zod": { "optional": true }
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "^3.25.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
