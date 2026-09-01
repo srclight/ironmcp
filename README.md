@@ -1,6 +1,6 @@
 # ironmcp
 
-MCP servers that refuse unknown arguments instead of silently dropping them — advertisement == runtime.
+A mistyped argument name should not get a confident answer to the wrong question. ironmcp makes an MCP tool refuse the undeclared argument with a recoverable error and enforce exactly the arguments it advertises — one guarantee, proven by a single conformance corpus, in Python, TypeScript, and PHP.
 
 Most MCP SDKs validate a tool call against its declared parameters and **silently drop** any
 argument that was not declared. One added letter (`project` → `projects`) yields a confident

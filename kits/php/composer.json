@@ -1,9 +1,9 @@
 {
     "name": "ironmcp/core",
-    "description": "MCP servers that refuse unknown arguments instead of silently dropping them — advertisement == runtime.",
+    "description": "Hardened, conformant MCP tools that refuse undeclared arguments with a recoverable error and enforce exactly what they advertise.",
     "type": "library",
     "license": "MIT",
-    "keywords": ["mcp", "model-context-protocol", "conformance", "hardening", "json-schema", "additionalProperties", "laravel", "wordpress", "woocommerce"],
+    "keywords": ["mcp", "model-context-protocol", "conformance", "hardening", "json-schema", "additionalProperties", "ai-agents", "strict-args", "laravel", "wordpress", "woocommerce"],
     "require": {
         "php": "^8.1",
         "mcp/sdk": "^0.8"
