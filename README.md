@@ -1,68 +1,29 @@
 # ironmcp
 
-**The hardening & conformance standard for MCP servers.** Dedicated, hardened,
-conformant MCP tooling on every platform — so nobody hand-rolls JSON-RPC again.
+The hardening and conformance standard for MCP servers: tool servers that **refuse unknown
+arguments instead of silently dropping them**, and advertise exactly what they enforce
+(advertisement == runtime).
 
-`ironmcp` is a policy layer for [Model Context Protocol](https://modelcontextprotocol.io)
-servers. It ships **no tools** — it constrains how *your* tools behave. The Python kit
-targets `mcp>=2`.
+The behavioural contract lives in [`spec/`](spec/) and is executable as the language-neutral
+corpus in [`conformance/`](conformance/). Each language kit implements that one contract
+natively on its own MCP SDK and passes that one corpus — the way POSIX is a single spec with
+many native libraries, not one library ported everywhere.
 
-## The problem it fixes
+## Kits
 
-Most MCP SDKs **silently drop** any argument a tool doesn't declare, before the tool
-runs — no error, no signal. One added letter (`project` → `projects`) yields a genuine
-answer to a question nobody asked, with no way for the caller to learn their constraint
-was ignored. `ironmcp` refuses the unknown argument instead, and advertises that it does.
+| Kit | Package | Registry | Location |
+|-----|---------|----------|----------|
+| Python | `ironmcp` | PyPI | [`kits/python/`](kits/python/) |
+| TypeScript | `ironmcp` | npm | [`kits/typescript/`](kits/typescript/) |
 
-## Quick start
+A kit conforms when a server built with its strict layer passes every case in
+[`conformance/cases/`](conformance/cases/). A corpus never watched to FAIL against an
+unguarded server is theatre, so every kit also proves the bare server is refused.
 
-```python
-from ironmcp import strict_server
+## Layout
 
-app = strict_server(name="my-server", version="1.0.0")
-
-@app.tool()
-async def search(query: str, limit: int = 20) -> str:
-    ...
 ```
-
-Now `search(query="x", projekt="y")` comes back as an **error result**
-("unknown argument(s): projekt … Nothing was executed"), instead of silently running
-with `projekt` dropped. The advertised schema carries `additionalProperties: false`, so
-agents are told the truth — **advertisement == runtime**. A tool that sets
-`additionalProperties: true` opts out and accepts arbitrary keys.
-
-## Conformance — the guarantee is provable
-
-```python
-from ironmcp import aassert_enforces_v2, run_corpus
-
-await aassert_enforces_v2(app)                         # every tool: advertisement == runtime
-results = await run_corpus(app, "conformance/cases")   # the language-neutral corpus
-assert all(r.passed for r in results)
+spec/                 the contract (language-agnostic)
+conformance/cases/    the corpus (one, owned by no language)
+kits/<language>/      one native kit per language, each passing the corpus
 ```
-
-The behavioural contract lives in [`spec/`](spec/), executable as
-[`conformance/`](conformance/) — a JSON corpus owned by no language. A kit in *any*
-language conforms when a server built with its strict layer passes the same cases. That
-is what makes "the same guarantee everywhere" provable rather than claimed.
-
-## Also included
-
-- `health_payload(name, version)` / `code_sha()` — agent-interrogable liveness (an agent
-  learns *what* a server is and *whether it is current* without asking a human).
-- `make_bearer_asgi(app, expected_token=...)` — fail-closed bearer auth (401 +
-  `WWW-Authenticate`) to wrap `app.streamable_http_app()`.
-
-## API
-
-`from ironmcp import` — `strict_server`, `StrictArgsMiddleware`, `assert_enforces_v2`,
-`aassert_enforces_v2`, `run_corpus`, `Result`, `health_payload`, `code_sha`,
-`make_bearer_asgi`.
-
-See [`examples/demo.py`](examples/demo.py) for a runnable server that proves the
-guarantee end to end.
-
-## License
-
-Apache-2.0. By [Srclight](https://srclight.dev).

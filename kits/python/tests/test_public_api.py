@@ -26,7 +26,7 @@ def test_v2_names_reachable_from_top_level_lazily():
 def test_spec_and_corpus_present():
     import pathlib
 
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[3]
     assert (root / "spec" / "strict-args.md").is_file()
     assert (root / "spec" / "conformance.md").is_file()
     assert list((root / "conformance" / "cases").glob("*.json"))
