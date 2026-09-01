@@ -49,8 +49,9 @@ use IronMcp\Harden;
 $server = Harden::server(Server::builder()->setServerInfo('search', '1.0.0')->addTool([Tools::class, 'search']));
 ```
 
-**Dart / Flutter** (`dart pub add ironmcp`, on `mcp_dart`) — a drop-in `McpServer` subclass, so an
-existing server hardens by changing one constructor:
+**Dart / Flutter** (on `mcp_dart`; publishing to pub.dev shortly — until then, a git dependency on
+this repo's `kits/dart`) — a drop-in `McpServer` subclass, so an existing server hardens by changing
+one constructor:
 ```dart
 import 'package:ironmcp/ironmcp.dart' show StrictMcpServer;
 final server = StrictMcpServer(Implementation(name: 'search', version: '1.0.0'), options: options);
