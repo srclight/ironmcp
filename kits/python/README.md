@@ -1,5 +1,7 @@
 # ironmcp
 
+_Part of the [ironmcp](../../README.md) monorepo — one contract, one [conformance corpus](../../conformance/), a native kit per language. For AI agents: [AGENTS.md](../../AGENTS.md). Direction: [ROADMAP.md](../../ROADMAP.md)._
+
 **The hardening & conformance standard for MCP servers.** Dedicated, hardened,
 conformant MCP tooling on every platform — so nobody hand-rolls JSON-RPC again.
 
@@ -42,8 +44,8 @@ results = await run_corpus(app, "conformance/cases")   # the language-neutral co
 assert all(r.passed for r in results)
 ```
 
-The behavioural contract lives in [`spec/`](spec/), executable as
-[`conformance/`](conformance/) — a JSON corpus owned by no language. A kit in *any*
+The behavioural contract lives in [`spec/`](../../spec/), executable as
+[`conformance/`](../../conformance/) — a JSON corpus owned by no language. A kit in *any*
 language conforms when a server built with its strict layer passes the same cases. That
 is what makes "the same guarantee everywhere" provable rather than claimed.
 
