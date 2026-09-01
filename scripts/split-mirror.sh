@@ -127,7 +127,7 @@ git clone --quiet "$MIRROR_PUSH_URL" "$WORK/mirror" || die "clone failed"
 cd "$WORK/mirror"
 # CI runners have no global git identity; set a local one so commit AND annotated tag work.
 git config user.name "ironmcp-bot"
-git config user.email "bot@ironmcp.dev"
+git config user.email "hello@srclight.dev"
 DEFAULT_BRANCH="$(git symbolic-ref --quiet --short HEAD || echo master)"
 
 # Refuse to move an existing immutable version tag (Packagist rejects re-publishing it).
