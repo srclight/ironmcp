@@ -31,4 +31,4 @@
 - [kits/python](kits/python/README.md): `pip install ironmcp` (targets `mcp>=2`).
 - [kits/typescript](kits/typescript/README.md): `npm install ironmcp` (official SDK + zod).
 - [kits/php](kits/php/README.md): `composer require ironmcp/core` (official PHP SDK).
-- [kits/dart](kits/dart/): `dart pub add ironmcp` (on `mcp_dart`; publishing to pub.dev shortly).
+- [kits/dart](kits/dart/): `dart pub add ironmcp` (on `mcp_dart`).
