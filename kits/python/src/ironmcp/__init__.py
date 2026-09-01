@@ -15,7 +15,7 @@ from .health import code_sha, health_payload
 from .http import build_http_app, serve_http
 from .strict import StrictArgsMiddleware, strict_server
 
-__version__ = "0.3.0"
+__version__ = "0.4.0"
 __all__ = [
     "StrictArgsMiddleware",
     "strict_server",
