@@ -125,6 +125,9 @@ WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
 log "cloning mirror $MIRROR_REPO ..."
 git clone --quiet "$MIRROR_PUSH_URL" "$WORK/mirror" || die "clone failed"
 cd "$WORK/mirror"
+# CI runners have no global git identity; set a local one so commit AND annotated tag work.
+git config user.name "ironmcp-bot"
+git config user.email "bot@ironmcp.dev"
 DEFAULT_BRANCH="$(git symbolic-ref --quiet --short HEAD || echo master)"
 
 # Refuse to move an existing immutable version tag (Packagist rejects re-publishing it).
@@ -139,8 +142,7 @@ git add -A
 if git diff --cached --quiet; then
   log "no content change vs mirror HEAD; will still tag $VERSION at current HEAD"
 else
-  git -c user.name="ironmcp-bot" -c user.email="bot@ironmcp.dev" \
-    commit --quiet -m "sync $TAG_PREFIX$VERSION from monorepo $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+  git commit --quiet -m "sync $TAG_PREFIX$VERSION from monorepo $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
 fi
 git tag -a "$VERSION" -m "ironmcp ${TAG_PREFIX}kit $VERSION"
 log "pushing $DEFAULT_BRANCH + tag $VERSION ..."
