@@ -9,3 +9,4 @@ export { unknownArgsMessage, DEFAULT_RECONNECT_HINT, MAX_ENUMERATED } from "./me
 export { assertEnforces, loadCases, type CorpusResult } from "./corpus.js";
 export { codeSha, healthPayload, IRONMCP_VERSION } from "./health.js";
 export { bearerOk } from "./auth.js";
+export { serveHttp, buildHttpHandler, type ServeHttpOpts } from "./http.js";
