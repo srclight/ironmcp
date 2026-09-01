@@ -10,3 +10,4 @@ library;
 export 'src/messages.dart';
 export 'src/strict_args.dart';
 export 'src/harden.dart';
+export 'src/results.dart';
