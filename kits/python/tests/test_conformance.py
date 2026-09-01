@@ -14,6 +14,26 @@ async def test_fires_against_bare_server():
 
 
 @pytest.mark.asyncio
+async def test_fires_against_advertised_closed_but_silently_dropping():
+    """The exact bug the checker exists to catch: a server that ADVERTISES
+    additionalProperties:false (so an agent trusts the closed contract) but does NOT
+    enforce it at runtime -- the discarded-argument bug, back again. Built by leaving
+    StrictArgsMiddleware UNBOUND (server=None): its tools/list stamp still closes the
+    advertised schema, but the tools/call enforce branch requires a bound server and is
+    skipped, so the unknown argument is silently dropped. If the checker did not FAIL
+    this, it would be a false pass in a shipped public assertion."""
+    from mcp.server.mcpserver import MCPServer
+
+    from ironmcp.strict import StrictArgsMiddleware
+
+    liar = build_probe_server(
+        MCPServer(name="liar", version="0.0.0", middleware=[StrictArgsMiddleware()])
+    )
+    with pytest.raises(AssertionError, match="discarded-argument bug"):
+        await aassert_enforces_v2(liar)
+
+
+@pytest.mark.asyncio
 async def test_passes_strict_server():
     n = await aassert_enforces_v2(build_strict_server())
     assert n >= 1

@@ -23,6 +23,14 @@ void main() {
     test('a token that is a prefix of the secret is rejected (constant-time)', () {
       expect(auth.accepts('Bearer s3cret'), isFalse);
     });
+    test('rejects a SAME-LENGTH but different token (proves the byte compare, not just length)',
+        () {
+      // 's3cret-token' and 'wrong-token1' are both 12 chars, so a length-only
+      // comparator would ACCEPT this — the constant-time byte comparison must
+      // reject it. Without this case, a regression to `a.length == b.length`
+      // would accept any 12-char bearer yet still pass the suite.
+      expect(auth.accepts('Bearer wrong-token1'), isFalse);
+    });
   });
 
   group('HostGuard (DNS-rebinding, default ON — invariant #4)', () {
