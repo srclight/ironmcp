@@ -16,6 +16,7 @@ pieces fit, so a developer or an AI agent can find what they want quickly.
 | Python | `ironmcp` | PyPI | shipped | [`kits/python/`](kits/python/) |
 | TypeScript | `ironmcp` | npm | shipped | [`kits/typescript/`](kits/typescript/) |
 | PHP | `ironmcp/core` | Packagist | shipped | [`kits/php/`](kits/php/) |
+| Dart | `ironmcp` | pub.dev | shipped | [`kits/dart/`](kits/dart/) |
 | Rust | `ironmcp` | crates.io | next | — |
 | Go, Java/Kotlin, Swift | — | — | planned | — |
 | C++, R, Perl | — | — | planned | — |
@@ -26,20 +27,28 @@ provable rather than claimed.
 
 ## What has landed
 
-- **The strict-args guard** — refuse unknown tool arguments at the pre-validation seam; stamp
-  `additionalProperties: false` on every advertised tool. See [`spec/strict-args.md`](spec/strict-args.md).
-  Python: `strict_server` / `StrictArgsMiddleware`. TypeScript: `strictServer` / `guardServer`.
-- **The conformance corpus + runner** — [`conformance/cases/`](conformance/cases/) driven through
-  a real in-memory client↔server session; `assert_enforces` / `assertEnforces`. A corpus never
-  watched to FAIL against an unguarded server is theatre, so every kit also proves the bare server
-  is refused. See [`conformance/README.md`](conformance/README.md).
-- **Interrogable health** — `health_payload` / `healthPayload`, `code_sha` / `codeSha`, so an agent
-  can tell when a server is running older code than it expects.
-- **Fail-closed bearer auth** — `make_bearer_asgi` (Python) / `bearerOk` (TypeScript): no configured
-  token authorises nothing; the comparison is constant-time.
-- **`serve_http` / `serveHttp`** — a hardened, authenticated, health-checked streamable-HTTP daemon
-  in one call: bearer-guarded `/mcp`, an open `/healthz` naming a capability, and the session-manager
-  lifespan handled so the port actually answers.
+The full substrate, in **all four kits** (Python, TypeScript, PHP, Dart) from one dependency, proven by
+the shared corpus:
+
+- **The strict-args guard** — refuse unknown tool arguments; stamp `additionalProperties: false` so
+  advertisement == runtime. Python `strict_server`, TypeScript `strictServer`/`guardServer`, PHP
+  `Harden::server`, Dart `StrictMcpServer` (a drop-in `McpServer` subclass).
+- **The conformance corpus + runner** — cases driven through a real client↔server session; every kit
+  also proves the *bare* server FAILS, because a corpus never watched to fail is theatre.
+- **Self-discovery registry** — a server registers itself; any agent enumerates every live ironmcp
+  server (namespace, port, capabilities). The registry file format is **byte-identical across all four
+  languages**, so servers in different languages appear in one shared list.
+- **Structured readiness + health** — a full readiness report (feature / native-library / data-file
+  status with a computed verdict that excludes environmental blocks) and a lightweight health tool;
+  `code_sha` to detect a server running older code than expected.
+- **Hardened serving** — a bearer-guarded `/mcp` (fail-closed, constant-time), an open `/healthz`
+  naming capabilities, a **DNS-rebinding host guard on by default**, and Windows TIME_WAIT port-retry.
+- **Content + clean-quit helpers** — correct image/binary tool results (with an empty-capture guard),
+  and a fenced, ordered, idempotent shutdown scaffold with an honest `quit` tool an agent can call.
+
+**Proven in production:** ironmcp hardens a desktop application's live MCP server (60+ tools) on both
+Linux and Windows, with zero behaviour change — a mistyped argument that used to return a confident
+wrong answer now returns a clear refusal.
 
 ## What is next
 
