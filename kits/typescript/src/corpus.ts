@@ -15,6 +15,7 @@ type Case = {
   expect: "refuse" | "accept";
   expect_message_contains?: string[];
   expect_message_excludes?: string[];
+  expect_structured?: Record<string, string[]>;
 };
 
 export function loadCases(casesDir: string): Case[] {
@@ -44,6 +45,16 @@ export async function assertEnforces(server: any, casesDir: string): Promise<num
         if (!text.includes(s)) failures.push(`${c.id}: message missing '${s}'`);
       for (const s of c.expect_message_excludes ?? [])
         if (text.includes(s)) failures.push(`${c.id}: message leaked '${s}'`);
+      // expect_structured: the refusal must carry structuredContent.ironmcp whose named
+      // fields CONTAIN the expected keys (machine-readable, not just prose).
+      if (c.expect_structured) {
+        const iron = (r.structuredContent as any)?.ironmcp;
+        for (const [field, expected] of Object.entries(c.expect_structured)) {
+          const got = iron?.[field];
+          if (!Array.isArray(got) || !expected.every((k) => got.includes(k)))
+            failures.push(`${c.id}: structuredContent.ironmcp.${field} missing ${JSON.stringify(expected)} (got ${JSON.stringify(got)})`);
+        }
+      }
     }
   } finally {
     await client.close();

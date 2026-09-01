@@ -1,0 +1,5 @@
+{ "id": "005-structured-refusal",
+  "description": "the refusal carries machine-readable structuredContent (ironmcp.unknown / ironmcp.accepted), not only prose, so an agent parses it instead of scraping text",
+  "tool": "echo", "arguments": {"a": "x", "typo": "ignored"},
+  "expect": "refuse",
+  "expect_structured": { "unknown": ["typo"], "accepted": ["a", "b"] } }

@@ -19,6 +19,9 @@ This is what makes "the same guarantee in every language" *provable* rather than
 ```
 
 - `expect`: `"refuse"` (the call must come back as an error result) or `"accept"` (it must not).
+- `expect_structured` (optional): an object `{field: [keys]}` the refusal's machine-readable
+  `structuredContent.ironmcp` must carry, each field CONTAINING the listed keys (e.g.
+  `{"unknown": ["typo"], "accepted": ["a","b"]}`). Pins that a refusal is parseable, not only prose.
 - `expect_message_contains` / `expect_message_excludes` (optional): substrings the refusal
   message must / must not contain. `excludes` is how we pin that argument *values* are never
   echoed back (only key *names*).
