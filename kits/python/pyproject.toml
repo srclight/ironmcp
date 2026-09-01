@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "ironmcp"
 version = "0.5.0"
-description = "The hardening & conformance standard for MCP servers. Strict args, conformance corpus, native per language."
+description = "Hardened, conformant MCP tools that refuse undeclared arguments with a recoverable error and enforce exactly what they advertise."
 readme = "README.md"
 requires-python = ">=3.11"
 # starlette is used DIRECTLY by ops.py (JSONResponse, BaseHTTPMiddleware) and arrives transitively

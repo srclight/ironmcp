@@ -1,0 +1,61 @@
+name: split-mirror-php
+
+# Keep the standalone Packagist mirror (srclight/ironmcp-php) in sync with the PHP
+# kit in this monorepo. Fires on a php-* release tag: it assembles kits/php + the
+# vendored conformance/ + spec/ into the mirror's root layout (see kits/php/.mirror.conf
+# and scripts/split-mirror.sh), then commits, tags the plain semver, and pushes.
+# Packagist's own GitHub hook on the mirror picks up the new tag from there.
+#
+# Generic by construction: a future kit gets its own <kit>/.mirror.conf and a
+# near-identical workflow — the assembler code does not change.
+#
+# Required repo secret:
+#   MIRROR_SYNC_TOKEN  — a fine-grained PAT with Contents: read/write on
+#                        srclight/ironmcp-php ONLY (least privilege). SSH deploy-key
+#                        alternative: set MIRROR_PUSH_URL instead of MIRROR_TOKEN.
+# Optional (belt-and-suspenders if the Packagist GitHub hook is not set up):
+#   PACKAGIST_USERNAME + PACKAGIST_TOKEN — to POST the update API directly.
+
+on:
+  push:
+    tags:
+      - 'php-*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Mirror semver to sync/tag (e.g. 0.1.1). Leave blank on a tag push.'
+        required: false
+        default: ''
+
+concurrency:
+  group: split-mirror-php
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out monorepo (with tags)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # tags needed so the script can derive the version from HEAD
+
+      - name: Sync PHP kit to the Packagist mirror
+        env:
+          MIRROR_TOKEN: ${{ secrets.MIRROR_SYNC_TOKEN }}
+          PACKAGIST_USERNAME: ${{ secrets.PACKAGIST_USERNAME }}
+          PACKAGIST_TOKEN: ${{ secrets.PACKAGIST_TOKEN }}
+          # Untrusted workflow_dispatch input — passed via env, never interpolated
+          # into the command line, and validated below before use.
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -n "${DISPATCH_VERSION:-}" ]; then
+            case "$DISPATCH_VERSION" in
+              [0-9]*.[0-9]*.[0-9]*) : ;;
+              *) echo "invalid version input: $DISPATCH_VERSION (want X.Y.Z)" >&2; exit 1;;
+            esac
+            bash scripts/split-mirror.sh kits/php --version "$DISPATCH_VERSION"
+          else
+            bash scripts/split-mirror.sh kits/php
+          fi
