@@ -1,0 +1,19 @@
+name: ironmcp
+description: >-
+  Hardened, conformant MCP tools that refuse undeclared arguments with a
+  recoverable error and enforce exactly what they advertise.
+version: 0.1.0
+repository: https://github.com/srclight/ironmcp
+topics:
+  - mcp
+  - conformance
+  - hardening
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  mcp_dart: ^2.0.0
+
+dev_dependencies:
+  test: ^1.25.0
