@@ -1,0 +1,85 @@
+"""F6 readiness: the overall verdict EXCLUDES blocked and off (#7)."""
+
+from ironmcp import (
+    DataFileStatus,
+    FeatureReadiness,
+    LibraryStatus,
+    ReadinessReport,
+    ReadinessStatus,
+)
+
+
+def _report(features):
+    return ReadinessReport(app_version="1", features=features)
+
+
+def test_overall_excludes_blocked_and_off_from_the_verdict_invariant_7():
+    r = _report(
+        [
+            FeatureReadiness(id="a", label="A", status=ReadinessStatus.ready),
+            FeatureReadiness(id="b", label="B", status=ReadinessStatus.blocked),
+            FeatureReadiness(id="c", label="C", status=ReadinessStatus.off),
+        ]
+    )
+    assert r.overall_status == ReadinessStatus.ready
+
+
+def test_all_blocked_off_still_yields_ready_the_dev_box_case_not_failed():
+    r = _report(
+        [
+            FeatureReadiness(id="a", label="A", status=ReadinessStatus.blocked),
+            FeatureReadiness(id="b", label="B", status=ReadinessStatus.off),
+        ]
+    )
+    assert r.overall_status == ReadinessStatus.ready
+
+
+def test_a_failed_counted_feature_makes_overall_failed():
+    r = _report(
+        [
+            FeatureReadiness(id="a", label="A", status=ReadinessStatus.ready),
+            FeatureReadiness(id="b", label="B", status=ReadinessStatus.failed),
+        ]
+    )
+    assert r.overall_status == ReadinessStatus.failed
+
+
+def test_a_degraded_feature_no_failures_makes_overall_degraded():
+    r = _report(
+        [FeatureReadiness(id="a", label="A", status=ReadinessStatus.degraded)]
+    )
+    assert r.overall_status == ReadinessStatus.degraded
+
+
+def test_a_blocked_feature_never_masks_a_failed_one():
+    """A blocked feature alongside a failed one: the failed one still decides."""
+    r = _report(
+        [
+            FeatureReadiness(id="a", label="A", status=ReadinessStatus.blocked),
+            FeatureReadiness(id="b", label="B", status=ReadinessStatus.failed),
+        ]
+    )
+    assert r.overall_status == ReadinessStatus.failed
+
+
+def test_to_json_is_stable_snake_case_with_the_computed_verdict():
+    j = ReadinessReport(
+        app_version="2.0",
+        native_version="1.5",
+        features=[
+            FeatureReadiness(
+                id="a", label="A", status=ReadinessStatus.ready, requires=["x"]
+            )
+        ],
+        libs=[
+            LibraryStatus(name="libfoo", loaded=True, symbols_checked=3, symbols_ok=3)
+        ],
+        data_files=[DataFileStatus(label="dict", found=True, path="/x")],
+        platform={"os": "linux"},
+    ).to_json()
+    assert j["app_version"] == "2.0"
+    assert j["overall_status"] == "ready"
+    assert j["libs"][0]["symbols_ok"] == 3
+    assert j["features"][0]["requires"] == ["x"]
+    assert j["data_files"][0]["found"] is True
+    assert j["native_version"] == "1.5"

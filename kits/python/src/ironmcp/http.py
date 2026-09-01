@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from .auth import make_bearer_asgi
+from typing import Iterable
+
+from .auth import make_bearer_asgi, make_host_guard_asgi
 from .health import code_sha as _code_sha
 
 
@@ -22,10 +24,16 @@ def build_http_app(
     healthz: bool = True,
     capabilities: dict | None = None,
     code_sha: str | None = None,
+    allowed_hosts: Iterable[str] | None = None,
 ) -> Any:
     """Compose the ASGI app: /healthz open (if enabled), everything else bearer-guarded, the
     mounted streamable-HTTP app's lifespan forwarded. Raises ValueError on an empty/whitespace
-    token — HTTP serving fails closed."""
+    token — HTTP serving fails closed.
+
+    When ``allowed_hosts`` is given, a DNS-rebinding :class:`~ironmcp.auth.HostGuard` is
+    layered in FRONT of the bearer (default-deny: an unlisted ``Host`` is ``403`` before auth
+    even runs — invariant #4). It is opt-in at the app boundary so a loopback dev server is
+    not locked out by accident; the guard's own posture is ON/default-deny once enabled."""
     from starlette.applications import Starlette
     from starlette.responses import JSONResponse
     from starlette.routing import Mount, Route
@@ -36,6 +44,8 @@ def build_http_app(
 
     mcp_app = server.streamable_http_app()
     guarded = make_bearer_asgi(mcp_app, expected_token=token)
+    if allowed_hosts is not None:
+        guarded = make_host_guard_asgi(guarded, allowed_hosts=allowed_hosts)
     caps = capabilities or {"strict_args": True, "ironmcp": True}
     sha = code_sha or _code_sha()
 
