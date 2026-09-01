@@ -1,6 +1,6 @@
 {
   "name": "ironmcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP servers that refuse unknown arguments instead of silently dropping them \u2014 advertisement == runtime.",
   "type": "module",
   "license": "MIT",
