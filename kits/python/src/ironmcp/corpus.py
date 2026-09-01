@@ -39,13 +39,21 @@ def load_cases(cases_dir: str | pathlib.Path) -> list[dict[str, Any]]:
     return [json.loads(p.read_text()) for p in sorted(pathlib.Path(cases_dir).glob("*.json"))]
 
 
-def _check(case: dict[str, Any], is_error: bool, text: str) -> Result:
+def _check(case: dict[str, Any], is_error: bool, text: str, structured: Any = None) -> Result:
     ok = is_error == (case["expect"] == "refuse")
     for s in case.get("expect_message_contains", []):
         ok = ok and (s in text)
     for s in case.get("expect_message_excludes", []):
         ok = ok and (s not in text)
-    detail = "" if ok else f"expect={case['expect']} is_error={is_error} text={text[:140]!r}"
+    # expect_structured: the refusal must carry machine-readable structuredContent.ironmcp
+    # whose named fields CONTAIN the expected keys (an agent parses it, not the prose).
+    exp = case.get("expect_structured")
+    if exp is not None:
+        iron = (structured or {}).get("ironmcp") if isinstance(structured, dict) else None
+        for field, expected in exp.items():
+            got = (iron or {}).get(field) if isinstance(iron, dict) else None
+            ok = ok and isinstance(got, list) and all(item in got for item in expected)
+    detail = "" if ok else f"expect={case['expect']} is_error={is_error} text={text[:140]!r} structured={structured}"
     return Result(case["id"], ok, detail)
 
 
@@ -62,6 +70,7 @@ async def run_corpus(server: Any, cases_dir: str | pathlib.Path) -> list[Result]
                     result = await client.call_tool(case["tool"], case["arguments"])
                     is_error = bool(getattr(result, "is_error", False))
                     text = " ".join(getattr(x, "text", "") for x in (result.content or []))
-                    results.append(_check(case, is_error, text))
+                    structured = getattr(result, "structured_content", None)
+                    results.append(_check(case, is_error, text, structured))
             tg.cancel_scope.cancel()
     return results
