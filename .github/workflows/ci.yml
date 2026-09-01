@@ -85,3 +85,23 @@ jobs:
               sys.exit(1)
           print(f"OK: runtime dependencies = {names} (within {permitted})")
           PY
+
+  php:
+    # The PHP kit passes the SAME root conformance/ corpus. ext-intl enables the NFKC-confusable
+    # message test (skipped without it).
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kits/php
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ["8.1", "8.2", "8.3"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          extensions: intl, mbstring
+      - run: composer install --no-interaction --no-progress
+      - run: vendor/bin/phpunit
