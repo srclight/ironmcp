@@ -15,8 +15,8 @@ pieces fit, so a developer or an AI agent can find what they want quickly.
 |-----|---------|----------|--------|----------|
 | Python | `ironmcp` | PyPI | shipped | [`kits/python/`](kits/python/) |
 | TypeScript | `ironmcp` | npm | shipped | [`kits/typescript/`](kits/typescript/) |
-| PHP | `ironmcp` | Packagist | next | — |
-| Rust | `ironmcp` | crates.io | planned | — |
+| PHP | `ironmcp/core` | Packagist | shipped | [`kits/php/`](kits/php/) |
+| Rust | `ironmcp` | crates.io | next | — |
 | Go, Java/Kotlin, Swift | — | — | planned | — |
 | C++, R, Perl | — | — | planned | — |
 
@@ -43,8 +43,8 @@ provable rather than claimed.
 
 ## What is next
 
-1. **The PHP kit** — WordPress, WooCommerce, Shopify, Laravel, Magento: the commerce and CMS backend
-   of a large share of the web. Same core, same corpus, on the official PHP MCP SDK.
+1. **The Rust kit** — same core, same corpus, on the Rust MCP SDK. (PHP shipped; its Laravel and
+   WordPress adapters + a serve_http-PHP are the next PHP steps.)
 2. **Retire the legacy SSE co-mount** across servers still launching `--transport sse` and standardise
    on streamable-HTTP (the SSE transport is deprecated in the MCP spec). Clients already use `/mcp`.
 3. **`ironmcp inspect`** — a CLI that runs the conformance corpus against any running server and prints
