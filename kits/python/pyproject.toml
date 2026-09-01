@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ironmcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "The hardening & conformance standard for MCP servers. Strict args, conformance corpus, native per language."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,7 +14,11 @@ requires-python = ">=3.11"
 dependencies = ["mcp>=2,<3", "starlette"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+# serve_http runs the composed ASGI app under uvicorn. build_http_app (the composable core)
+# needs only starlette; the runner needs an ASGI server. Kept an extra so the runtime deps
+# stay minimal (the STUBBY supply-chain rule) — `pip install ironmcp[serve]` to run it.
+serve = ["uvicorn"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "httpx", "uvicorn"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ironmcp"]

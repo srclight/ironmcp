@@ -1,5 +1,7 @@
 # ironmcp
 
+_Part of the [ironmcp](../../README.md) monorepo — one contract, one [conformance corpus](../../conformance/), a native kit per language. For AI agents: [AGENTS.md](../../AGENTS.md). Direction: [ROADMAP.md](../../ROADMAP.md)._
+
 MCP servers that refuse unknown arguments instead of silently dropping them — advertisement == runtime.
 
 Most MCP SDKs validate a tool call against its declared parameters and **silently drop** any
