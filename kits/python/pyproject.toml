@@ -14,7 +14,11 @@ requires-python = ">=3.11"
 dependencies = ["mcp>=2,<3", "starlette"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24"]
+# serve_http runs the composed ASGI app under uvicorn. build_http_app (the composable core)
+# needs only starlette; the runner needs an ASGI server. Kept an extra so the runtime deps
+# stay minimal (the STUBBY supply-chain rule) — `pip install ironmcp[serve]` to run it.
+serve = ["uvicorn"]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "httpx", "uvicorn"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ironmcp"]

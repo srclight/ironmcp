@@ -12,6 +12,7 @@ from .auth import make_bearer_asgi
 from .conformance import aassert_enforces_v2, assert_enforces_v2
 from .corpus import Result, run_corpus
 from .health import code_sha, health_payload
+from .http import build_http_app, serve_http
 from .strict import StrictArgsMiddleware, strict_server
 
 __version__ = "0.3.0"
@@ -25,4 +26,6 @@ __all__ = [
     "code_sha",
     "health_payload",
     "make_bearer_asgi",
+    "build_http_app",
+    "serve_http",
 ]
