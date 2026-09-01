@@ -38,6 +38,28 @@ jobs:
       # warnings-as-errors come from pyproject. A green bar here means the tests RAN.
       - run: pytest -q
 
+  typescript:
+    # The TypeScript kit passes the SAME root conformance/ corpus as Python — so it is tested
+    # here too, or "same guarantee in every language" is a claim that never executes. Overrides
+    # the workflow-level working-directory (which points at kits/python).
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kits/typescript
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ["20", "22"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - run: npm run build
+
   dependency-rule:
     # STUBBY, 2026-08-29: after publishing, this package becomes a write path into six servers,
     # one of which ACTS on its input. The runtime dependency set is therefore ENFORCED, not

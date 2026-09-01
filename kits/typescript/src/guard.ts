@@ -38,7 +38,16 @@ export function guardCallTool(
       toolName: name,
       reconnectHint: opts.reconnectHint,
     });
-    if (!known.ok) return { content: [{ type: "text", text: known.message }], isError: true };
+    if (!known.ok)
+      return {
+        content: [{ type: "text", text: known.message }],
+        // The prose is human/agent-readable; structuredContent is the same facts machine-
+        // readable, so an agent parses unknown/accepted instead of scraping the text.
+        structuredContent: {
+          ironmcp: { refused: true, tool: name, unknown: known.unknown, accepted: known.accepted },
+        },
+        isError: true,
+      };
     return handler(req, extra);
   };
 }
@@ -88,7 +97,16 @@ export function guardServer(server: Server, opts: { reconnectHint?: string } = {
     }
     const args = (req?.params?.arguments ?? {}) as Record<string, unknown>;
     const known = checkUnknownArgs(schemas.get(name), args, { toolName: name, reconnectHint: opts.reconnectHint });
-    if (!known.ok) return { content: [{ type: "text", text: known.message }], isError: true };
+    if (!known.ok)
+      return {
+        content: [{ type: "text", text: known.message }],
+        // The prose is human/agent-readable; structuredContent is the same facts machine-
+        // readable, so an agent parses unknown/accepted instead of scraping the text.
+        structuredContent: {
+          ironmcp: { refused: true, tool: name, unknown: known.unknown, accepted: known.accepted },
+        },
+        isError: true,
+      };
     return h(req, extra);
   };
 

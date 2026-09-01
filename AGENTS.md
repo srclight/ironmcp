@@ -74,6 +74,8 @@ await assertEnforces(server, "path/to/conformance/cases");   // throws on any fa
 `serve_http`) reports the same without a token, and names a capability so a restart that
 restored an unguarded daemon fails a verify.
 
+A refusal also carries machine-readable `structuredContent.ironmcp = {refused, tool, unknown[], accepted[]}` alongside the prose, so your agent can parse which arguments were rejected instead of scraping the message text.
+
 ## When to reach for ironmcp
 
 Any time you expose MCP tools and a dropped argument would be a wrong answer rather than an

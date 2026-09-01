@@ -78,9 +78,20 @@ class StrictArgsMiddleware(ServerMiddleware):
                 if unknown:
                     msg = unknown_args_message(name, unknown, accepted, self._reconnect_hint)
                     # Short-circuit: return the refusal WITHOUT calling call_next, so the
-                    # tool handler never runs (verified legal, docs/v2-contract.md).
+                    # tool handler never runs (verified legal, docs/v2-contract.md). The prose
+                    # is for a human/agent to read; structured_content is the same facts machine-
+                    # readable, so an agent parses unknown/accepted instead of scraping the text.
                     return CallToolResult(
-                        is_error=True, content=[TextContent(type="text", text=msg)]
+                        is_error=True,
+                        content=[TextContent(type="text", text=msg)],
+                        structured_content={
+                            "ironmcp": {
+                                "refused": True,
+                                "tool": name,
+                                "unknown": unknown,
+                                "accepted": sorted(accepted),
+                            }
+                        },
                     )
         return await call_next(ctx)
 
