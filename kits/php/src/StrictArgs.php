@@ -20,7 +20,8 @@ final class StrictArgs
         if (!self::isEnforced($schema)) {
             return ['ok' => true]; // states 1 (unintrospectable) & 3 (opted open)
         }
-        $accepted = array_keys($schema['properties'] ?? []);
+        // properties may be a stdClass when an SDK normalised an empty {} — cast to array.
+        $accepted = array_keys((array) ($schema['properties'] ?? []));
         $acceptedSet = array_fill_keys($accepted, true);
         $unknown = array_values(array_filter(
             array_keys($args ?? []),
