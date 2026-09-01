@@ -12,3 +12,4 @@ export 'src/strict_args.dart';
 export 'src/harden.dart';
 export 'src/results.dart';
 export 'src/serve.dart';
+export 'src/quit.dart';
