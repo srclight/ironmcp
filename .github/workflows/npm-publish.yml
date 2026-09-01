@@ -1,0 +1,68 @@
+name: npm-publish
+
+# Publishes the TypeScript kit (kits/typescript, package `ironmcp`) to npm using
+# OIDC Trusted Publishing — NO long-lived NPM_TOKEN secret. The registry validates
+# a short-lived OIDC token minted by this workflow against the package's configured
+# trusted publisher, and stamps npm provenance from the same token.
+#
+# ONE-TIME npm-side setup (npmjs.com, package `ironmcp` → Settings → Publishing
+# access / Trusted Publisher → GitHub Actions):
+#   Organization or user: srclight
+#   Repository:           ironmcp
+#   Workflow filename:    npm-publish.yml
+#   Environment:          (leave blank)
+# After that, this workflow publishes with no secret. Rotate nothing; the trust is
+# scoped to this repo + workflow.
+#
+# Fires on a `ts-*` release tag (the same tag convention that marks a TypeScript kit
+# release), or manually with dry_run to validate the pack without publishing.
+
+on:
+  push:
+    tags:
+      - 'ts-*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Pack only — validate without publishing'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write # required: mint the OIDC token for Trusted Publishing + provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: kits/typescript
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted Publishing (OIDC) requires npm >= 11.5.1; setup-node ships an older npm.
+      - name: Upgrade npm to a Trusted-Publishing-capable version
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Publish (OIDC Trusted Publishing, provenance)
+        if: ${{ github.event_name == 'push' || !inputs.dry_run }}
+        run: npm publish --provenance --access public
+
+      - name: Dry-run pack (no publish)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+        run: npm pack --dry-run
