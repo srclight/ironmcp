@@ -28,7 +28,13 @@ export class CleanQuit {
       try {
         await this.steps[i]();
       } catch (e) {
-        this.onError?.(i, e);
+        // The error handler is itself FENCED: a throwing onError must not abort the remaining
+        // steps (the whole point of #5). An absent onError is already a no-op via `?.`.
+        try {
+          this.onError?.(i, e);
+        } catch {
+          /* a broken reporter cannot strand shutdown */
+        }
       }
     }
   }

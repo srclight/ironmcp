@@ -30,6 +30,22 @@ describe("checkUnknownArgs — the 3-state rule", () => {
   it("undefined schema -> permissive", () => {
     expect(checkUnknownArgs(undefined, { x: 1 }).ok).toBe(true);
   });
+  it("state 1: MALFORMED properties (a string) is UNINTROSPECTABLE -> permissive, never refuse-all", () => {
+    // `properties` present but not a map: we cannot read the accepted set, so we must fail OPEN.
+    // A naive Object.keys("abc") would yield ["0","1","2"] and wrongly refuse every real arg.
+    const bad = { type: "object", properties: "not-an-object" } as any;
+    expect(checkUnknownArgs(bad, { a: 1, b: 2 }).ok).toBe(true);
+  });
+  it("state 1: MALFORMED properties (a list) is UNINTROSPECTABLE -> permissive", () => {
+    const bad = { type: "object", properties: ["a", "b"] } as any;
+    expect(checkUnknownArgs(bad, { whatever: 1 }).ok).toBe(true);
+    // and stampClosed leaves an unintrospectable schema alone (never fabricates a closed contract)
+    expect(stampClosed(bad)).toEqual(bad);
+  });
+  it("state 2: args=undefined against an enforced schema is treated as no args (the `args ?? {}` guard) -> ok", () => {
+    expect(checkUnknownArgs(withProps, undefined).ok).toBe(true);
+    expect(checkUnknownArgs(zeroArg, undefined).ok).toBe(true);
+  });
 });
 
 describe("stampClosed", () => {

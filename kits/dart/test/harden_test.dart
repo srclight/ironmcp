@@ -74,4 +74,96 @@ void main() {
     );
     expect(reg, isNotNull); // override ran, stamped + guarded, delegated cleanly
   });
+
+  // GAP: stamp reconstructs the ToolInputSchema when closing it — the `required`
+  // list must survive, or a closed schema silently drops its required-arg
+  // constraint.
+  test('stamp PRESERVES the required list when it closes the schema', () {
+    final stamped = Harden.stamp(schema)!.toJson();
+    expect(stamped['additionalProperties'], isFalse);
+    expect(stamped['required'], ['a']); // not lost in reconstruction
+    expect((stamped['properties'] as Map).keys, containsAll(['a', 'b']));
+  });
+
+  // GAP: a malformed schema whose properties is not a map must NOT be stamped
+  // closed (canonical fix #4 — enforce only when introspectable). ToolInputSchema
+  // is typed, so this is exercised via StrictArgs.stampClosed on a raw schema in
+  // strict_args_test; here we pin that a null schema stays null and an opted-open
+  // one is untouched (already covered above), and add the composition API below.
+
+  // GAP: the HardenedServer composition wrapper and the harden() factory had ZERO
+  // tests — the callback-wrapping refusal path on the composition API was
+  // entirely unverified. Invoke the WRAPPED callback directly (no transport).
+  RequestHandlerExtra dummyExtra() => RequestHandlerExtra(
+        signal: BasicAbortController().signal,
+        requestId: 1,
+        sendNotification: (n, {relatedTask}) async {},
+        sendRequest: <T extends BaseResultData>(req, factory, opts) async =>
+            throw UnimplementedError(),
+      );
+
+  McpServer plainServer() => McpServer(
+        Implementation(name: 'comp', version: '0.0.0'),
+        options: McpServerOptions(
+          capabilities: ServerCapabilities(tools: ServerCapabilitiesTools()),
+        ),
+      );
+
+  test('harden() returns a HardenedServer wrapping the given inner server', () {
+    final inner = plainServer();
+    final h = harden(inner);
+    expect(h, isA<HardenedServer>());
+    expect(identical(h.inner, inner), isTrue);
+  });
+
+  test('HardenedServer advertises the schema CLOSED on the registered tool', () {
+    final h = harden(plainServer());
+    final reg = h.registerTool(
+      'echo',
+      inputSchema: ToolInputSchema(properties: {'a': JsonSchema.string()}),
+      callback: (args, extra) =>
+          CallToolResult(content: [TextContent(text: 'ok')]),
+    );
+    expect(reg.inputSchema!.toJson()['additionalProperties'], isFalse);
+  });
+
+  test('HardenedServer WRAPS the callback: an undeclared arg is refused, body never runs',
+      () async {
+    final h = harden(plainServer());
+    var ran = 0;
+    final reg = h.registerTool(
+      'echo',
+      inputSchema: ToolInputSchema(properties: {'a': JsonSchema.string()}),
+      callback: (args, extra) {
+        ran++;
+        return CallToolResult(content: [TextContent(text: 'ok')]);
+      },
+    );
+    final fn = (reg.callback as FunctionToolCallback).function;
+    final refused = await fn({'a': 'x', 'sneaky': 'p@ssw0rd'}, dummyExtra());
+    expect(refused.isError, isTrue);
+    expect((refused.content.first as TextContent).text,
+        isNot(contains('p@ssw0rd'))); // value never echoed
+    expect(ran, 0); // the wrapper stopped it BEFORE the body
+
+    // …and a clean call still reaches the body on the same wrapped tool.
+    final ok = await fn({'a': 'x'}, dummyExtra());
+    expect(ok.isError, isFalse);
+    expect(ran, 1);
+  });
+
+  test('HardenedServer honours a custom reconnect hint in the wrapped refusal',
+      () async {
+    final h = harden(plainServer(), reconnectHint: 'reconnect via pack_status');
+    final reg = h.registerTool(
+      'echo',
+      inputSchema: ToolInputSchema(properties: {'a': JsonSchema.string()}),
+      callback: (args, extra) =>
+          CallToolResult(content: [TextContent(text: 'ok')]),
+    );
+    final fn = (reg.callback as FunctionToolCallback).function;
+    final refused = await fn({'bad': 1}, dummyExtra());
+    expect((refused.content.first as TextContent).text,
+        contains('reconnect via pack_status'));
+  });
 }

@@ -74,10 +74,14 @@ class StrictArgs {
     return {...schema!, 'additionalProperties': false};
   }
 
-  /// True only in state 2: `properties` present (even empty) and not opted open.
+  /// True only in state 2: `properties` present AS A MAP (even empty) and not
+  /// opted open. A schema whose `properties` is present but not a map (a string,
+  /// a list — a malformed schema) is UNINTROSPECTABLE, so it falls to state 1
+  /// (permissive): the guard enforces only what it can actually read, and never
+  /// refuses every argument because it could not parse the shape.
   static bool _isEnforced(Map<String, Object?>? schema) {
     return schema != null &&
-        schema.containsKey('properties') &&
+        schema['properties'] is Map &&
         schema['additionalProperties'] != true;
   }
 }

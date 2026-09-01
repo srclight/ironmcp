@@ -23,22 +23,25 @@ final class HostGuard
     {
         $set = [];
         foreach ($allowedHosts as $h) {
-            $set[$h] = true;
+            // HTTP Host is case-insensitive (RFC 7230 §2.7.3 / §5.4): fold to lower-case so a
+            // 'Localhost' allowlist entry still matches a 'localhost' Host header and vice versa.
+            $set[strtolower($h)] = true;
         }
         $this->allowedHosts = $set;
     }
 
-    /** True iff [hostHeader] is allowed. A null/empty host is rejected. */
+    /** True iff [hostHeader] is allowed. A null/empty host is rejected. Matching is case-insensitive. */
     public function accepts(?string $hostHeader): bool
     {
         if ($hostHeader === null || $hostHeader === '') {
             return false;
         }
-        if (isset($this->allowedHosts[$hostHeader])) {
+        $host = strtolower($hostHeader);
+        if (isset($this->allowedHosts[$host])) {
             return true;
         }
         if ($this->allowPortlessMatch) {
-            $portless = explode(':', $hostHeader, 2)[0];
+            $portless = explode(':', $host, 2)[0];
             if (isset($this->allowedHosts[$portless])) {
                 return true;
             }

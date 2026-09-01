@@ -25,6 +25,23 @@ describe("Results", () => {
     expect(r.isError).toBe(true);
   });
 
+  it("image ACCEPTS exactly 9 bytes — MIN_BYTES+1, the smallest payload that must pass (off-by-one guard)", () => {
+    // 8 rejected (above) and 9 accepted here pin the EXACT `<=` boundary: a `<` slip would accept 8,
+    // a `<=`-off-by-one on the accept side would reject 9. Both edges are now nailed down.
+    const bytes = Uint8Array.from({ length: 9 }, (_, i) => i + 1);
+    const r = Results.image(bytes);
+    expect(r.isError).toBeFalsy();
+    const img = r.content[0] as ImageBlock;
+    expect(img.type).toBe("image");
+    expect([...Buffer.from(img.data, "base64")]).toEqual([...bytes]);
+  });
+
+  it("audio ACCEPTS exactly 9 bytes too (same boundary on the non-PNG path)", () => {
+    const r = Results.audio(new Uint8Array(9));
+    expect(r.isError).toBeFalsy();
+    expect((r.content[0] as AudioBlock).type).toBe("audio");
+  });
+
   it("image base64-encodes real bytes byte-safely (round-trips exactly)", () => {
     const bytes = Uint8Array.from({ length: 64 }, (_, i) => i);
     const r = Results.image(bytes, "image/png");

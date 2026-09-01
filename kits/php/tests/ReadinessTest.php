@@ -57,6 +57,21 @@ final class ReadinessTest extends TestCase
         $this->assertSame(ReadinessStatus::Degraded, $r->overallStatus());
     }
 
+    /**
+     * Gap #9: failed BEATS degraded when BOTH are counted at once. The two-loop ordering in
+     * overallStatus() must return Failed even though a Degraded feature is also present (and, here,
+     * appears BEFORE the failed one in the list) — proving the precedence is by status, not by order.
+     */
+    public function testFailedBeatsDegradedWhenBothArePresent(): void
+    {
+        $r = self::report([
+            new FeatureReadiness('a', 'A', ReadinessStatus::Degraded),
+            new FeatureReadiness('b', 'B', ReadinessStatus::Failed),
+            new FeatureReadiness('c', 'C', ReadinessStatus::Degraded),
+        ]);
+        $this->assertSame(ReadinessStatus::Failed, $r->overallStatus());
+    }
+
     /** A failed feature that is itself blocked/off must NOT count (guards the exclusion). */
     public function testABlockedFailedLikeStatusDoesNotDragTheVerdict(): void
     {

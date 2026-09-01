@@ -84,6 +84,142 @@ final class RegistryTest extends TestCase
         $this->assertArrayNotHasKey('b', $raw, 'the dead entry must be gone from the file');
     }
 
+    /**
+     * Canonical fix #3 (persistence, not just an in-memory re-prune): after discover() prunes a dead
+     * pid it MUST rewrite registry.json, so a FRESH Registry instance — one that has never seen the
+     * dead entry and treats every pid as alive — reading the file from disk sees only the live entry.
+     * This proves invariant #10's lazy GC is durable, not a per-process illusion.
+     */
+    public function testDeadPidPruneIsPersistedAndSeenByAFreshReader(): void
+    {
+        $pruner = new Registry(dir: $this->dir, isPidAlive: static fn (int $pid): bool => $pid !== 2);
+        $pruner->register(new RegistryEntry(id: 'a', namespace: 'test', pid: 1));
+        $pruner->register(new RegistryEntry(id: 'b', namespace: 'test', pid: 2)); // dead
+        $pruner->discover(); // prunes 'b' and MUST rewrite the file
+
+        // A brand-new instance, all-pids-alive, reading only what is on disk.
+        $fresh = new Registry(dir: $this->dir, isPidAlive: static fn (int $_): bool => true);
+        $ids = array_map(static fn (RegistryEntry $e): string => $e->id, $fresh->discover());
+        $this->assertSame(['a'], $ids, 'the dead entry must be gone from disk, not merely re-pruned in memory');
+    }
+
+    /**
+     * Gap #5 / canonical fix #5: a corrupt, empty, or non-object registry.json must make
+     * discover()/register() START FRESH rather than crash. Exercises all three read() recovery
+     * branches: a JsonException on garbage, an empty/whitespace-only file, and a top-level JSON array.
+     */
+    public function testCorruptEmptyOrNonObjectRegistryStartsFresh(): void
+    {
+        foreach (['{ this is not json', '', "   \n  ", '["a", "b"]'] as $bad) {
+            file_put_contents($this->dir . '/registry.json', $bad);
+
+            $reg = new Registry(dir: $this->dir, isPidAlive: static fn (int $_): bool => true);
+            $this->assertSame([], $reg->discover(), "discover() must start fresh on malformed content: {$bad}");
+
+            // register() must succeed on top of the malformed file, replacing it with a valid object.
+            $reg->register(new RegistryEntry(id: 'x', namespace: 'ns', pid: 1));
+            $this->assertSame(['x'], array_map(static fn (RegistryEntry $e): string => $e->id, $reg->discover()));
+        }
+    }
+
+    /**
+     * discover()'s malformed-ENTRY prune: a stray scalar or [] stored under a key (not a valid entry
+     * object) is dropped and the file rewritten. Proven durable via a fresh reader.
+     */
+    public function testDiscoverPrunesAMalformedEntryAndPersists(): void
+    {
+        // Hand-craft a file: one valid entry plus two malformed values under keys.
+        $valid = (new RegistryEntry(id: 'good', namespace: 'ns', pid: 1))->toArray();
+        $raw = ['good' => $valid, 'scalar' => 42, 'list' => ['x', 'y']];
+        file_put_contents($this->dir . '/registry.json', json_encode($raw, JSON_THROW_ON_ERROR));
+
+        $reg = new Registry(dir: $this->dir, isPidAlive: static fn (int $_): bool => true);
+        $ids = array_map(static fn (RegistryEntry $e): string => $e->id, $reg->discover());
+        $this->assertSame(['good'], $ids, 'malformed non-object entries must be pruned');
+
+        // Persisted: a fresh reader sees only the good entry, and the malformed keys are gone from disk.
+        $onDisk = json_decode((string) file_get_contents($this->dir . '/registry.json'), true);
+        $this->assertArrayHasKey('good', $onDisk);
+        $this->assertArrayNotHasKey('scalar', $onDisk);
+        $this->assertArrayNotHasKey('list', $onDisk);
+    }
+
+    /**
+     * withLock stale-lock steal: a crashed holder can leave a lock file behind. Past staleLockAfter
+     * the lock is stolen so a live writer is not blocked forever. With staleLockAfter=0 any existing
+     * lock is immediately stale, so register() steals it and still lands the entry.
+     */
+    public function testWithLockStealsAStaleLock(): void
+    {
+        // Simulate a crashed holder's leftover lock.
+        file_put_contents($this->dir . '/registry.json.lock', '');
+
+        $reg = new Registry(
+            dir: $this->dir,
+            isPidAlive: static fn (int $_): bool => true,
+            lockTimeout: 1.0,
+            staleLockAfter: 0.0, // any existing lock is instantly stale
+        );
+        $reg->register(new RegistryEntry(id: 'a', namespace: 'ns', pid: 1));
+
+        $this->assertSame(['a'], array_map(static fn (RegistryEntry $e): string => $e->id, $reg->discover()));
+    }
+
+    /**
+     * withLock give-up-and-proceed: when a FRESH (non-stale) lock is held and lockTimeout elapses,
+     * the writer proceeds best-effort WITHOUT the lock rather than losing the write — and, because it
+     * never acquired the lock, it must not delete the holder's lock on the way out.
+     */
+    public function testWithLockProceedsBestEffortWhenLockHeldPastTimeout(): void
+    {
+        $lock = $this->dir . '/registry.json.lock';
+        file_put_contents($lock, ''); // a fresh lock, held by (a simulated) live holder
+
+        $reg = new Registry(
+            dir: $this->dir,
+            isPidAlive: static fn (int $_): bool => true,
+            lockTimeout: 0.0,     // deadline is now: give up immediately
+            staleLockAfter: 1000, // never steal — the lock looks freshly held
+        );
+        $reg->register(new RegistryEntry(id: 'a', namespace: 'ns', pid: 1));
+
+        // The write still landed despite not holding the lock (best-effort proceed)...
+        $this->assertSame(['a'], array_map(static fn (RegistryEntry $e): string => $e->id, $reg->discover()));
+        // ...and the holder's lock was left in place (we never owned it, so we must not unlink it).
+        $this->assertFileExists($lock, 'a proceed-without-lock writer must not remove a lock it never held');
+    }
+
+    /**
+     * The DEFAULT liveness probe (no injected stub): the current process's own pid is alive, so an
+     * entry keyed to it survives discover(); a reaped child's pid is dead, so its entry is pruned.
+     * Every other Registry test injects isPidAlive — this is the only exercise of the real POSIX/proc
+     * kill(0) path.
+     */
+    public function testDefaultPidProbeKeepsSelfAndPrunesADeadChild(): void
+    {
+        $reg = new Registry(dir: $this->dir); // REAL pidAliveDefault, no stub
+        $reg->register(new RegistryEntry(id: 'self', namespace: 'ns', pid: getmypid() ?: 1));
+
+        if (\function_exists('pcntl_fork')) {
+            $child = pcntl_fork();
+            if ($child === 0) {
+                exit(0); // child dies immediately
+            }
+            pcntl_waitpid($child, $status); // reap -> $child pid is now dead
+            $reg->register(new RegistryEntry(id: 'dead', namespace: 'ns', pid: $child));
+
+            $ids = array_map(static fn (RegistryEntry $e): string => $e->id, $reg->discover());
+            $this->assertContains('self', $ids, 'the running process pid must read as alive');
+            $this->assertNotContains('dead', $ids, 'a reaped child pid must read as dead and be pruned');
+        } else {
+            $this->assertContains(
+                'self',
+                array_map(static fn (RegistryEntry $e): string => $e->id, $reg->discover()),
+                'the running process pid must read as alive',
+            );
+        }
+    }
+
     public function testUnregisterRemovesAnEntry(): void
     {
         $reg = new Registry(dir: $this->dir, isPidAlive: static fn (int $_): bool => true);

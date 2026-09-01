@@ -117,3 +117,45 @@ async def test_mcp_is_reachable_over_a_real_server():
     finally:
         server.should_exit = True
         thread.join(timeout=5)
+
+
+def test_allowed_hosts_layers_a_host_guard_in_front_of_bearer():
+    """build_http_app(..., allowed_hosts=...) puts a default-deny HostGuard in FRONT of the
+    bearer: an unlisted Host is 403 before auth runs; a listed Host with no token reaches the
+    bearer 401."""
+    from starlette.testclient import TestClient
+
+    from ironmcp import build_http_app
+
+    app = build_http_app(_server(), token="secret", allowed_hosts=["good.local"])
+    with TestClient(app) as client:
+        # /mcp: a rebinding host is 403 before the bearer runs; a listed host with no token
+        # reaches the bearer 401. The guard sits in FRONT of the bearer (invariant #4).
+        assert client.post("/mcp", json={}, headers={"Host": "evil.example.com"}).status_code == 403
+        assert client.post("/mcp", json={}, headers={"Host": "good.local"}).status_code == 401
+        # /healthz is the deliberately-open route (a sibling of the guarded mount), so it
+        # answers regardless of Host — the guard fronts the bearer, not the health probe.
+        assert client.get("/healthz", headers={"Host": "good.local"}).status_code == 200
+
+
+def test_healthz_false_omits_the_health_route():
+    from starlette.testclient import TestClient
+
+    from ironmcp import build_http_app
+
+    app = build_http_app(_server(), token="secret", healthz=False)
+    with TestClient(app) as client:
+        # no /healthz route: the request falls through to the bearer-guarded mount -> 401
+        assert client.get("/healthz").status_code == 401
+
+
+def test_default_capabilities_when_none_supplied():
+    """capabilities=None -> the built-in default {'strict_args':True,'ironmcp':True}."""
+    from starlette.testclient import TestClient
+
+    from ironmcp import build_http_app
+
+    app = build_http_app(_server(), token="secret")  # capabilities omitted
+    with TestClient(app) as client:
+        caps = client.get("/healthz").json()["capabilities"]
+        assert caps == {"strict_args": True, "ironmcp": True}

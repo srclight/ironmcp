@@ -52,8 +52,15 @@ final class CleanQuit
             try {
                 $step();
             } catch (\Throwable $e) {
+                // The error reporter itself is fenced: a throwing onError (or an absent one) must
+                // NOT abort the remaining shutdown steps — that would strand the rest exactly when
+                // the reporter is the thing that fails, defeating the per-step guarantee.
                 if ($this->onError !== null) {
-                    ($this->onError)($i, $e);
+                    try {
+                        ($this->onError)($i, $e);
+                    } catch (\Throwable) {
+                        // swallow: a failed error report never cancels the shutdown sequence.
+                    }
                 }
             }
         }

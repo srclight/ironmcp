@@ -190,7 +190,11 @@ export class IronMcpRegistry {
       const txt = await fs.readFile(this.file, "utf8");
       if (txt.trim() === "") return {};
       const parsed = JSON.parse(txt);
-      return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
+      // A registry is a flat object keyed by id. A JSON array / scalar / null is malformed for
+      // this fabric — start fresh rather than iterate garbage keys.
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
     } catch {
       return {}; // missing/corrupt/unreadable: start fresh rather than crash
     }

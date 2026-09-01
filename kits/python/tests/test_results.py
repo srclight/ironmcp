@@ -80,3 +80,31 @@ def test_truncated_text_marks_how_many_chars_were_dropped():
 
 def test_truncated_text_leaves_short_text_intact():
     assert Results.truncated_text("hi", max_chars=10).content[0].text == "hi"
+
+
+def test_min_bytes_boundary_is_exactly_8_reject_9_accept_all_helpers():
+    """The <=8 guard, pinned at the boundary for image/audio/bytes: 8 bytes -> rejected,
+    9 bytes -> accepted (loqu8 invariant #8)."""
+    assert Results.image(bytes(8)).is_error is True
+    assert Results.image(bytes(9)).is_error is False
+    assert Results.audio(bytes(8)).is_error is True
+    assert Results.audio(bytes(9)).is_error is False
+    assert Results.bytes(bytes(8), mime_type="application/octet-stream").is_error is True
+    assert Results.bytes(bytes(9), mime_type="application/octet-stream").is_error is False
+
+
+def test_bytes_explicit_image_kind_beats_a_non_image_mime():
+    """kind='image' forces ImageContent even when the mime is non-image — the explicit kind
+    overrides the mime-based routing."""
+    r = Results.bytes(bytes(range(20)), mime_type="application/octet-stream", kind="image")
+    assert r.is_error is False
+    assert isinstance(r.content[0], ImageContent)
+    assert r.content[0].mime_type == "application/octet-stream"
+
+
+def test_truncated_text_at_exactly_max_chars_is_left_intact():
+    """len == max_chars hits the <= boundary: no truncation marker, the whole body returned."""
+    body = "x" * 10
+    t = Results.truncated_text(body, max_chars=10).content[0].text
+    assert t == body
+    assert "truncated" not in t

@@ -81,3 +81,50 @@ def test_host_guard_sits_in_front_of_bearer():
         ).status_code
         == 200
     )
+
+
+# --- host matching is case-INSENSITIVE (RFC 7230) -------------------------------------
+
+
+def test_host_match_is_case_insensitive_incoming_host():
+    g = HostGuard(allowed_hosts=["localhost", "wasabi.local"])
+    assert g.accepts("Localhost") is True
+    assert g.accepts("LOCALHOST:8080") is True
+    assert g.accepts("Wasabi.Local:18888") is True
+
+
+def test_host_match_is_case_insensitive_allowlist_entry():
+    """A mixed-case allowlist entry still matches a lower-case incoming host."""
+    g = HostGuard(allowed_hosts=["LocalHost"])
+    assert g.accepts("localhost") is True
+    assert g.accepts("localhost:9000") is True
+
+
+# --- non-HTTP scopes pass through BOTH ASGI wrappers untouched -------------------------
+
+
+@pytest.mark.asyncio
+async def test_non_http_scope_passes_through_both_wrappers():
+    async def _noop_recv():
+        return {}
+
+    async def _noop_send(_m):
+        return None
+
+    for wrap in (
+        lambda inner: make_bearer_asgi(inner, expected_token="tok"),
+        lambda inner: make_host_guard_asgi(inner, allowed_hosts=["good.local"]),
+    ):
+        reached = {"v": False}
+
+        async def inner(scope, receive, send):
+            reached["v"] = True
+
+        guarded = wrap(inner)
+        # a websocket scope carries no auth/host checks — it must pass straight through
+        await guarded({"type": "websocket"}, _noop_recv, _noop_send)
+        assert reached["v"] is True
+        # a lifespan scope likewise passes through
+        reached["v"] = False
+        await guarded({"type": "lifespan"}, _noop_recv, _noop_send)
+        assert reached["v"] is True

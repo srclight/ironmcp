@@ -103,6 +103,13 @@ final class Daemon
             if ($this->unbind !== null) {
                 ($this->unbind)();
             }
+        } catch (\Throwable $e) {
+            // Best-effort: a throwing unbind must NOT propagate out of stop() (the docstring's
+            // contract) — record it and, if wired, log it, but always leave the daemon stopped.
+            $this->lastError = $e;
+            if ($this->onLog !== null) {
+                ($this->onLog)("unbind failed (ignored, best-effort stop): {$e->getMessage()}");
+            }
         } finally {
             $this->running = false;
         }

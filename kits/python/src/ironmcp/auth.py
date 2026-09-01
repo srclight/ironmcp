@@ -68,16 +68,21 @@ class HostGuard:
     def __init__(
         self, *, allowed_hosts: Iterable[str], allow_portless_match: bool = True
     ) -> None:
-        self.allowed_hosts = set(allowed_hosts)
+        # HTTP Host is case-INSENSITIVE (RFC 7230 §5.4 / §2.7.3): "Localhost" and
+        # "localhost" are the same authority. Fold the allowlist to lower-case once so the
+        # incoming host (also folded, below) matches regardless of the casing either side used.
+        self.allowed_hosts = {h.lower() for h in allowed_hosts}
         self.allow_portless_match = allow_portless_match
 
     def accepts(self, host_header: str | None) -> bool:
-        """True iff ``host_header`` is allowed. A null/empty host is rejected."""
+        """True iff ``host_header`` is allowed. A null/empty host is rejected. The match is
+        case-insensitive (RFC 7230): ``Localhost`` matches ``localhost``."""
         if not host_header:
             return False
-        if host_header in self.allowed_hosts:
+        host = host_header.lower()
+        if host in self.allowed_hosts:
             return True
-        if self.allow_portless_match and host_header.split(":", 1)[0] in self.allowed_hosts:
+        if self.allow_portless_match and host.split(":", 1)[0] in self.allowed_hosts:
             return True
         return False
 

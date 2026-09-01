@@ -46,16 +46,21 @@ class BearerAuth {
 /// reach still works while a rebinding attacker's `Host` is refused).
 class HostGuard {
   HostGuard({required Iterable<String> allowedHosts, this.allowPortlessMatch = true})
-      : allowedHosts = allowedHosts.toSet();
+      // HTTP Host is case-insensitive (RFC 7230 §2.7.3 / §5.4), so the allowlist
+      // is folded to lower case once and every incoming host is folded before
+      // comparison — 'Localhost' matches 'localhost'.
+      : allowedHosts = allowedHosts.map((h) => h.toLowerCase()).toSet();
 
   final Set<String> allowedHosts;
   final bool allowPortlessMatch;
 
-  /// True iff [hostHeader] is allowed. A null/empty host is rejected.
+  /// True iff [hostHeader] is allowed. A null/empty host is rejected. Matching is
+  /// case-insensitive per RFC 7230.
   bool accepts(String? hostHeader) {
     if (hostHeader == null || hostHeader.isEmpty) return false;
-    if (allowedHosts.contains(hostHeader)) return true;
-    if (allowPortlessMatch && allowedHosts.contains(hostHeader.split(':').first)) {
+    final host = hostHeader.toLowerCase();
+    if (allowedHosts.contains(host)) return true;
+    if (allowPortlessMatch && allowedHosts.contains(host.split(':').first)) {
       return true;
     }
     return false;

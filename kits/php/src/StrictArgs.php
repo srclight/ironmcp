@@ -54,11 +54,35 @@ final class StrictArgs
         return $schema;
     }
 
-    /** True only in state 2: properties present (even []) and not opted open. */
+    /** True only in state 2: an INTROSPECTABLE properties map is present and the tool is not opted open. */
     private static function isEnforced(?array $schema): bool
     {
-        return $schema !== null
-            && array_key_exists('properties', $schema)
-            && (($schema['additionalProperties'] ?? null) !== true);
+        if ($schema === null || !array_key_exists('properties', $schema)) {
+            return false;
+        }
+        if (($schema['additionalProperties'] ?? null) === true) {
+            return false; // state 3: opted open
+        }
+
+        return self::propertiesIntrospectable($schema['properties']);
+    }
+
+    /**
+     * A `properties` value is introspectable as a name map when it is an object shape: an empty
+     * array (`{}`), an associative array, or a stdClass (an SDK-normalised empty `{}`). A malformed
+     * schema — `properties` given as a string or a populated JSON list — is NOT introspectable, and
+     * a guard that bricks what it cannot read is worse than the bug it prevents: treat it as state 1
+     * (permissive), never refuse every argument.
+     */
+    private static function propertiesIntrospectable(mixed $properties): bool
+    {
+        if ($properties instanceof \stdClass) {
+            return true;
+        }
+        if (\is_array($properties)) {
+            return $properties === [] || !array_is_list($properties);
+        }
+
+        return false;
     }
 }

@@ -78,4 +78,27 @@ final class ServeTest extends TestCase
         $d->stop(); // no throw when already stopped
         $this->assertFalse($d->isRunning());
     }
+
+    /**
+     * stop() is best-effort (its docstring): a throwing unbind must NOT propagate out of stop().
+     * The daemon must still end up stopped, the error is captured, and a wired log sink is told.
+     */
+    public function testStopIsBestEffortWhenUnbindThrows(): void
+    {
+        $logged = [];
+        $d = new Daemon(
+            bind: static function (): void {},
+            unbind: static function (): void { throw new \RuntimeException('unbind exploded'); },
+            retryDelay: 0.0,
+            onLog: static function (string $m) use (&$logged): void { $logged[] = $m; },
+        );
+        $d->start();
+        $this->assertTrue($d->isRunning());
+
+        $d->stop(); // must not throw despite the throwing unbind
+
+        $this->assertFalse($d->isRunning(), 'a throwing unbind must still leave the daemon stopped');
+        $this->assertInstanceOf(\RuntimeException::class, $d->lastError());
+        $this->assertNotEmpty($logged, 'the ignored unbind failure is logged when a sink is wired');
+    }
 }

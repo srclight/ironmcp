@@ -72,6 +72,42 @@ final class HardenTest extends TestCase
         $this->assertFalse($r->getTool('echo')->tool->inputSchema['additionalProperties']);
     }
 
+    /**
+     * Gap #6: the skip branch (`$closed === $tool->inputSchema` -> continue). An opted-open tool
+     * (additionalProperties:true) and an unintrospectable tool (no `properties`) must be left in the
+     * registry UNCHANGED — never unregistered/re-registered — while a normal tool alongside them is
+     * still stamped closed. An over-eager stamp of the opted-open tool would silently close it.
+     */
+    public function testHardenLeavesOptedOpenAndUnintrospectableToolsRegisteredUnchanged(): void
+    {
+        $r = new Registry();
+        $openSchema = ['type' => 'object', 'properties' => ['a' => []], 'additionalProperties' => true];
+        $bareSchema = ['type' => 'object']; // no properties -> unintrospectable
+        $closableSchema = ['type' => 'object', 'properties' => ['a' => ['type' => 'string']]];
+        $r->registerTool(new Tool('opened', null, $openSchema, null, null), static fn (): string => 'x');
+        $r->registerTool(new Tool('bare', null, $bareSchema, null, null), static fn (): string => 'y');
+        $r->registerTool(new Tool('closable', null, $closableSchema, null, null), static fn (): string => 'z');
+
+        // Capture the exact Tool object identities before hardening.
+        $openedBefore = $r->getTool('opened')->tool;
+        $bareBefore = $r->getTool('bare')->tool;
+
+        Harden::registry($r);
+
+        // The opted-open tool keeps additionalProperties:true and is the SAME Tool instance (untouched).
+        $openedAfter = $r->getTool('opened')->tool;
+        $this->assertTrue($openedAfter->inputSchema['additionalProperties'], 'opted-open must stay open');
+        $this->assertSame($openedBefore, $openedAfter, 'opted-open tool must not be re-registered');
+
+        // The unintrospectable tool is untouched (no additionalProperties key appears) and same instance.
+        $bareAfter = $r->getTool('bare')->tool;
+        $this->assertArrayNotHasKey('additionalProperties', $bareAfter->inputSchema);
+        $this->assertSame($bareBefore, $bareAfter, 'unintrospectable tool must not be re-registered');
+
+        // The normal tool alongside them IS stamped closed.
+        $this->assertFalse($r->getTool('closable')->tool->inputSchema['additionalProperties']);
+    }
+
     public function testTheRefusalNeverEchoesAValue(): void
     {
         $h = new StrictArgsHandler($this->registryWithEcho());

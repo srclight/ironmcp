@@ -72,3 +72,38 @@ async def _append(target: list[int], value: int) -> None:
 
 async def _boom() -> None:
     raise RuntimeError("boom")
+
+
+@pytest.mark.asyncio
+async def test_a_throwing_step_with_default_on_error_none_still_does_not_abort():
+    """With NO on_error handler (the default), a throwing step is still fenced — the remaining
+    steps run. Fencing is not conditional on a handler being supplied."""
+    order: list[int] = []
+    await CleanQuit(
+        [
+            lambda: _append(order, 1),
+            _boom,
+            lambda: _append(order, 3),
+        ]
+    ).run()
+    assert order == [1, 3]
+
+
+@pytest.mark.asyncio
+async def test_a_throwing_on_error_handler_is_itself_fenced():
+    """The error HANDLER is fenced too: if on_error raises, it must NOT abort the remaining
+    shutdown steps (a reporting hook cannot strand telemetry-flush / window-destroy)."""
+    order: list[int] = []
+
+    def _bad_handler(_i, _e):
+        raise RuntimeError("handler itself blew up")
+
+    await CleanQuit(
+        [
+            lambda: _append(order, 1),
+            _boom,
+            lambda: _append(order, 3),
+        ],
+        on_error=_bad_handler,
+    ).run()
+    assert order == [1, 3]  # step 3 still ran despite the handler throwing

@@ -114,4 +114,113 @@ void main() {
     expect(s1, '2026-09-01T10:35:34.123Z');
     expect(s2, s1); // parse then re-emit is a fixed point
   });
+
+  // GAP (canonical fix #3): the previous prune test could pass even if the
+  // _write(map) on prune were deleted, because the second discover re-prunes in
+  // memory. PROVE persistence: after a prune, a FRESH registry that considers
+  // EVERY pid alive must still not see the dead entry — it can only be gone if
+  // discover() actually rewrote registry.json to disk.
+  test('discover PERSISTS the prune to disk (fresh reader sees it gone, #10)',
+      () async {
+    final writer = IronMcpRegistry(dir: dir, isPidAlive: (pid) => pid != 2);
+    await writer.register(IronMcpEntry(id: 'a', namespace: 'test', pid: 1));
+    await writer.register(IronMcpEntry(id: 'b', namespace: 'test', pid: 2)); // dead
+    expect((await writer.discover()).map((e) => e.id).toSet(), {'a'});
+
+    // A brand-new reader, treating ALL pids as alive, reads registry.json from
+    // disk. If the prune had NOT been rewritten, 'b' would still be on disk and
+    // this reader would resurrect it. It must not.
+    final fresh = IronMcpRegistry(dir: dir, isPidAlive: (_) => true);
+    expect((await fresh.discover()).map((e) => e.id).toSet(), {'a'},
+        reason: 'the dead entry must be gone FROM DISK, not just re-pruned');
+    // And the file on disk literally no longer names the dead pid.
+    final onDisk = await File('${dir.path}/registry.json').readAsString();
+    expect(onDisk.contains('"pid": 2'), isFalse);
+  });
+
+  // GAP (canonical fix #5): a corrupt or whitespace-only registry.json must
+  // start fresh, not crash, on both discover() and register().
+  test('a corrupt registry.json recovers (discover starts fresh, no crash)',
+      () async {
+    await Directory(dir.path).create(recursive: true);
+    await File('${dir.path}/registry.json').writeAsString('{ this is not json');
+    final reg = IronMcpRegistry(dir: dir, isPidAlive: (_) => true);
+    expect(await reg.discover(), isEmpty); // recovered, not thrown
+    // …and a register onto the corrupt file succeeds and yields a clean store.
+    await reg.register(IronMcpEntry(id: 'a', namespace: 'test', pid: 1));
+    expect((await reg.discover()).map((e) => e.id).toSet(), {'a'});
+  });
+
+  test('a whitespace-only registry.json is treated as empty, not a crash',
+      () async {
+    await Directory(dir.path).create(recursive: true);
+    await File('${dir.path}/registry.json').writeAsString('   \n\t  ');
+    final reg = IronMcpRegistry(dir: dir, isPidAlive: (_) => true);
+    expect(await reg.discover(), isEmpty);
+  });
+
+  // GAP: a stale lock left by a crashed holder is stolen past staleLockAfter.
+  test('a stale lock (older than staleLockAfter) is stolen so a register proceeds',
+      () async {
+    await Directory(dir.path).create(recursive: true);
+    final lock = File('${dir.path}/registry.json.lock');
+    await lock.create();
+    // Backdate the lock so it looks abandoned by a crashed process.
+    await lock.setLastModified(DateTime.now().subtract(const Duration(minutes: 5)));
+    final reg = IronMcpRegistry(
+      dir: dir,
+      isPidAlive: (_) => true,
+      staleLockAfter: const Duration(seconds: 1),
+      lockTimeout: const Duration(seconds: 2),
+    );
+    await reg.register(IronMcpEntry(id: 'a', namespace: 'test', pid: 1));
+    expect((await reg.discover()).map((e) => e.id).toSet(), {'a'});
+  });
+
+  // GAP: when the lock is held and NOT stale, the writer proceeds best-effort at
+  // the lockTimeout deadline rather than hanging forever.
+  test('a held (fresh) lock: register proceeds best-effort at lockTimeout',
+      () async {
+    await Directory(dir.path).create(recursive: true);
+    final lock = File('${dir.path}/registry.json.lock');
+    await lock.create(); // held, fresh mtime -> never stolen within the window
+    final reg = IronMcpRegistry(
+      dir: dir,
+      isPidAlive: (_) => true,
+      staleLockAfter: const Duration(hours: 1),
+      lockTimeout: const Duration(milliseconds: 80),
+    );
+    final sw = Stopwatch()..start();
+    await reg.register(IronMcpEntry(id: 'a', namespace: 'test', pid: 1));
+    sw.stop();
+    expect(sw.elapsedMilliseconds, greaterThanOrEqualTo(60)); // waited the deadline
+    expect((await reg.discover()).map((e) => e.id).toSet(), {'a'}); // wrote anyway
+  });
+
+  // GAP: fromJson with a missing or unparseable started_at defaults to now
+  // (a canonical millisecond-Z shape), never throwing.
+  test('fromJson defaults a missing started_at to a canonical now-timestamp', () {
+    final e = IronMcpEntry.fromJson({'id': 'x', 'namespace': 'ns', 'pid': 9});
+    final s = e.toJson()['started_at'] as String;
+    expect(canonical.hasMatch(s), isTrue);
+    // Defaulted to ~now, well after an obviously-old sentinel.
+    expect(e.startedAt.isAfter(DateTime.utc(2000)), isTrue);
+  });
+
+  test('fromJson defaults an UNPARSEABLE started_at to now, not a crash', () {
+    final e = IronMcpEntry.fromJson(
+        {'id': 'x', 'namespace': 'ns', 'pid': 9, 'started_at': 'not-a-date'});
+    expect(canonical.hasMatch(e.toJson()['started_at'] as String), isTrue);
+  });
+
+  // GAP: register() with an existing id OVERWRITES rather than duplicating.
+  test('register with an existing id overwrites (last write wins)', () async {
+    final reg = IronMcpRegistry(dir: dir, isPidAlive: (_) => true);
+    await reg.register(IronMcpEntry(id: 'a', namespace: 'test', pid: 1, port: 8080));
+    await reg.register(IronMcpEntry(id: 'a', namespace: 'test', pid: 2, port: 9090));
+    final live = await reg.discover();
+    expect(live.length, 1); // one entry, not two
+    expect(live.single.pid, 2); // the second registration won
+    expect(live.single.port, 9090);
+  });
 }

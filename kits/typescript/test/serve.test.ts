@@ -55,4 +55,30 @@ describe("bindWithRetry (F3 non-fatal port-retry)", () => {
     expect(isPortBusy(new Error("nope"))).toBe(false);
     expect(isPortBusy(undefined)).toBe(false);
   });
+
+  it("invokes onLog before each retry and honours a NON-DEFAULT maxRetries", async () => {
+    const logs: string[] = [];
+    let calls = 0;
+    const r = await bindWithRetry(
+      async () => {
+        calls++;
+        throw eaddrinuse(); // never succeeds
+      },
+      { maxRetries: 5, retryDelayMs: 0, onLog: (m) => logs.push(m) },
+    );
+    expect(r.ok).toBe(false);
+    expect(calls).toBe(5); // custom maxRetries, not the default 3
+    expect(r.attempts).toBe(5);
+    // onLog fires between attempts (not after the final one): maxRetries-1 messages.
+    expect(logs).toHaveLength(4);
+    expect(logs[0]).toContain("attempt 1/5");
+    expect(logs[3]).toContain("attempt 4/5");
+  });
+
+  it("onLog does NOT fire when the first bind succeeds", async () => {
+    const logs: string[] = [];
+    const r = await bindWithRetry(async () => {}, { retryDelayMs: 0, onLog: (m) => logs.push(m) });
+    expect(r.ok).toBe(true);
+    expect(logs).toEqual([]);
+  });
 });

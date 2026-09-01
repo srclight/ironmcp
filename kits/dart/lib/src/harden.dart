@@ -17,8 +17,10 @@ class Harden {
   static ToolInputSchema? stamp(ToolInputSchema? schema) {
     if (schema == null) return null;
     final json = schema.toJson();
+    // Enforce only when introspectable: `properties` present AS A MAP and not
+    // opted open. A malformed schema is left unchanged, never stamped closed.
     final enforced =
-        json.containsKey('properties') && json['additionalProperties'] != true;
+        json['properties'] is Map && json['additionalProperties'] != true;
     if (!enforced) return schema;
     return ToolInputSchema(
       properties: schema.properties,

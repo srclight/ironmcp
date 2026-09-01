@@ -34,6 +34,30 @@ describe("ReadinessReport", () => {
     expect(report([{ id: "a", label: "A", status: "degraded" }]).overallStatus).toBe("degraded");
   });
 
+  it("NO counted features (empty, or all blocked/off) yields ready — zero features is not a failure", () => {
+    expect(report([]).overallStatus).toBe("ready");
+    expect(new ReadinessReport({ appVersion: "1" }).overallStatus).toBe("ready"); // features omitted
+  });
+
+  it("failed takes precedence over degraded when BOTH are present among counted features", () => {
+    // Directly pin the precedence: a report holding a failed AND a degraded counted feature is
+    // 'failed', never 'degraded'. (The other failed-test pairs ready+failed only.)
+    expect(
+      report([
+        { id: "a", label: "A", status: "degraded" },
+        { id: "b", label: "B", status: "failed" },
+        { id: "c", label: "C", status: "ready" },
+      ]).overallStatus,
+    ).toBe("failed");
+    // order-independent: degraded listed AFTER failed still resolves to failed
+    expect(
+      report([
+        { id: "a", label: "A", status: "failed" },
+        { id: "b", label: "B", status: "degraded" },
+      ]).overallStatus,
+    ).toBe("failed");
+  });
+
   it("toJSON is stable snake_case with the computed verdict", () => {
     const j = new ReadinessReport({
       appVersion: "2.0",

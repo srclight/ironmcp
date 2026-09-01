@@ -62,4 +62,37 @@ void main() {
     expect((j['features'] as List).first['requires'], ['x']);
     expect((j['data_files'] as List).first['found'], isTrue);
   });
+
+  // GAP: an empty feature list must report ready (nothing counted against it).
+  test('an empty feature list yields ready (vacuously)', () {
+    expect(report([]).overallStatus, ReadinessStatus.ready);
+  });
+
+  // GAP: failed OUTRANKS degraded when BOTH a failed and a degraded counted
+  // feature are present — the precedence branch was never exercised directly.
+  test('failed outranks degraded when both counted statuses are present', () {
+    final r = report([
+      FeatureReadiness(id: 'a', label: 'A', status: ReadinessStatus.degraded),
+      FeatureReadiness(id: 'b', label: 'B', status: ReadinessStatus.failed),
+      FeatureReadiness(id: 'c', label: 'C', status: ReadinessStatus.ready),
+    ]);
+    expect(r.overallStatus, ReadinessStatus.failed);
+  });
+
+  // GAP: the LibraryStatus.error non-null branch (a failed FFI probe) was
+  // untested — it must serialize the error string.
+  test('LibraryStatus carries the error string when a probe fails', () {
+    final j = LibraryStatus(
+      name: 'libnomad',
+      loaded: false,
+      error: 'dlopen: cannot open shared object file',
+    ).toJson();
+    expect(j['loaded'], isFalse);
+    expect(j['error'], 'dlopen: cannot open shared object file');
+  });
+
+  test('LibraryStatus omits the error key when the probe succeeded', () {
+    final j = LibraryStatus(name: 'libnomad', loaded: true).toJson();
+    expect(j.containsKey('error'), isFalse);
+  });
 }

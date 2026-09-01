@@ -20,15 +20,18 @@ export class HostGuard {
   readonly allowPortlessMatch: boolean;
 
   constructor(allowedHosts: Iterable<string>, opts: { allowPortlessMatch?: boolean } = {}) {
-    this.allowedHosts = new Set(allowedHosts);
+    // HTTP Host is case-insensitive (RFC 7230 §2.7.3 / §5.4) — fold the allowlist to lower case
+    // so "Localhost" matches "localhost". Storing folded means both sides compare folded.
+    this.allowedHosts = new Set([...allowedHosts].map((h) => h.toLowerCase()));
     this.allowPortlessMatch = opts.allowPortlessMatch ?? true;
   }
 
-  /** True iff hostHeader is allowed. A null/undefined/empty host is rejected. */
+  /** True iff hostHeader is allowed. A null/undefined/empty host is rejected. Case-insensitive. */
   accepts(hostHeader: string | undefined | null): boolean {
     if (!hostHeader) return false;
-    if (this.allowedHosts.has(hostHeader)) return true;
-    if (this.allowPortlessMatch && this.allowedHosts.has(hostHeader.split(":")[0])) return true;
+    const host = hostHeader.toLowerCase();
+    if (this.allowedHosts.has(host)) return true;
+    if (this.allowPortlessMatch && this.allowedHosts.has(host.split(":")[0])) return true;
     return false;
   }
 }

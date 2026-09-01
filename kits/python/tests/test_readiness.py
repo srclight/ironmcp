@@ -83,3 +83,31 @@ def test_to_json_is_stable_snake_case_with_the_computed_verdict():
     assert j["features"][0]["requires"] == ["x"]
     assert j["data_files"][0]["found"] is True
     assert j["native_version"] == "1.5"
+
+
+def test_empty_features_list_yields_ready():
+    """No features to count is the vacuous-ready edge: overall_status is ready, not failed."""
+    assert _report([]).overall_status == ReadinessStatus.ready
+
+
+def test_degraded_and_failed_together_failed_wins():
+    r = _report(
+        [
+            FeatureReadiness(id="a", label="A", status=ReadinessStatus.degraded),
+            FeatureReadiness(id="b", label="B", status=ReadinessStatus.failed),
+        ]
+    )
+    assert r.overall_status == ReadinessStatus.failed
+
+
+def test_to_json_omits_optional_none_fields():
+    """The optional-field omission branches: details/reason/requires (feature), error (lib),
+    path (data file) are DROPPED from the JSON when unset — not emitted as null."""
+    feat = FeatureReadiness(id="a", label="A", status=ReadinessStatus.ready).to_json()
+    assert "details" not in feat and "reason" not in feat and "requires" not in feat
+
+    lib = LibraryStatus(name="libfoo", loaded=True).to_json()
+    assert "error" not in lib
+
+    data = DataFileStatus(label="dict", found=False).to_json()
+    assert "path" not in data

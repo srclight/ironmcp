@@ -4,6 +4,7 @@ list (#3), and the on-disk format byte-compatible with the Dart kit."""
 import json
 import os
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 
@@ -131,3 +132,131 @@ def test_xdg_path_resolution_matches_dart(monkeypatch, tmp_path):
     reg = IronMcpRegistry(is_pid_alive=lambda _p: True)
     reg.register(IronMcpEntry(id="a", namespace="t", pid=1))
     assert os.path.isfile(str(tmp_path / "run" / "ironmcp" / "registry.json"))
+
+
+# --- crash-recovery lock branches (the two the cross-process mutex exists for) ----------
+
+
+def test_stale_lock_is_stolen_past_stale_lock_after(reg_dir):
+    """A crashed holder leaves the O_EXCL lockfile behind. A later writer whose age >
+    stale_lock_after STEALS it (unlink + continue) rather than blocking forever."""
+    os.makedirs(reg_dir, exist_ok=True)
+    lock = os.path.join(reg_dir, "registry.json.lock")
+    open(lock, "w").close()
+    old = time.time() - 3600  # an hour stale
+    os.utime(lock, (old, old))
+    reg = IronMcpRegistry(
+        dir=reg_dir, is_pid_alive=lambda _p: True, stale_lock_after=1.0, lock_timeout=0.05
+    )
+    reg.register(IronMcpEntry(id="a", namespace="t", pid=1))  # must not hang
+    # the stolen lock was acquired for real, so the body ran AND released it
+    assert {e.id for e in reg.discover()} == {"a"}
+    assert not os.path.exists(lock)
+
+
+def test_lock_timeout_falls_through_best_effort(reg_dir):
+    """A FRESH lock we may not steal + an exceeded deadline -> proceed best-effort WITHOUT
+    the lock (the deadlock-avoidance fallthrough). The body still runs; the foreign lock is
+    left in place (we never acquired it, so we never unlink it)."""
+    os.makedirs(reg_dir, exist_ok=True)
+    lock = os.path.join(reg_dir, "registry.json.lock")
+    open(lock, "w").close()  # fresh mtime: not stealable under a huge stale_lock_after
+    reg = IronMcpRegistry(
+        dir=reg_dir, is_pid_alive=lambda _p: True, stale_lock_after=1e9, lock_timeout=0.0
+    )
+    reg.register(IronMcpEntry(id="a", namespace="t", pid=1))  # proceeds best-effort
+    assert {e.id for e in reg.discover()} == {"a"}  # body ran despite no lock
+    assert os.path.exists(lock)  # foreign lock left untouched (never acquired)
+
+
+# --- corrupt / empty registry.json: start fresh, never crash (invariant + fix #5) -------
+
+
+def test_discover_on_corrupt_json_starts_fresh_not_crash(reg_dir):
+    os.makedirs(reg_dir, exist_ok=True)
+    with open(os.path.join(reg_dir, "registry.json"), "w") as f:
+        f.write("{not valid json at all ]]]")
+    reg = IronMcpRegistry(dir=reg_dir, is_pid_alive=lambda _p: True)
+    assert reg.discover() == []  # no raise
+
+
+def test_register_over_corrupt_json_starts_fresh(reg_dir):
+    os.makedirs(reg_dir, exist_ok=True)
+    with open(os.path.join(reg_dir, "registry.json"), "w") as f:
+        f.write("\x00\x01 garbage")
+    reg = IronMcpRegistry(dir=reg_dir, is_pid_alive=lambda _p: True)
+    reg.register(IronMcpEntry(id="a", namespace="t", pid=1))  # no raise; overwrites garbage
+    assert {e.id for e in reg.discover()} == {"a"}
+
+
+def test_whitespace_only_registry_is_empty(reg_dir):
+    os.makedirs(reg_dir, exist_ok=True)
+    with open(os.path.join(reg_dir, "registry.json"), "w") as f:
+        f.write("   \n\t  ")
+    reg = IronMcpRegistry(dir=reg_dir, is_pid_alive=lambda _p: True)
+    assert reg.discover() == []
+
+
+# --- discover() prune is PERSISTED to disk, not merely pruned in memory (fix #3) --------
+
+
+def test_discover_prune_is_persisted_a_fresh_reader_sees_it_gone(reg_dir):
+    """After discover() prunes a dead-pid entry it MUST rewrite the file. Prove persistence
+    (not an in-memory re-prune): a FRESH registry that believes EVERY pid is alive must still
+    not see the pruned entry — it is gone from disk."""
+    writer = IronMcpRegistry(dir=reg_dir, is_pid_alive=lambda pid: pid != 2)
+    writer.register(IronMcpEntry(id="a", namespace="t", pid=1))
+    writer.register(IronMcpEntry(id="b", namespace="t", pid=2))  # dead pid
+    assert {e.id for e in writer.discover()} == {"a"}  # prunes b, rewrites the file
+    reader = IronMcpRegistry(dir=reg_dir, is_pid_alive=lambda _p: True)  # trusts every pid
+    assert {e.id for e in reader.discover()} == {"a"}  # b was written out of the file, not just skipped
+
+
+# --- the REAL default pid-liveness probe (every other test injects a fake) --------------
+
+
+def test_pid_alive_default_fails_open_and_closed_correctly(monkeypatch):
+    from ironmcp.registry import _pid_alive_default
+
+    assert _pid_alive_default(0) is False       # pid <= 0
+    assert _pid_alive_default(-1) is False
+    assert _pid_alive_default(os.getpid()) is True  # this very process is alive
+
+    # a reliably-dead pid: spawn a child, reap it, then probe -> ProcessLookupError -> False
+    import subprocess
+
+    p = subprocess.Popen(["true"])
+    p.wait()
+    assert _pid_alive_default(p.pid) is False
+
+    # PermissionError -> True (exists, owned by another user); OSError -> True (fail OPEN)
+    def _perm(_pid, _sig):
+        raise PermissionError
+
+    def _oserr(_pid, _sig):
+        raise OSError
+
+    monkeypatch.setattr(os, "kill", _perm)
+    assert _pid_alive_default(99999) is True
+    monkeypatch.setattr(os, "kill", _oserr)
+    assert _pid_alive_default(99999) is True
+
+
+# --- the two lower rungs of the _default_dir precedence chain ---------------------------
+
+
+def test_default_dir_falls_back_to_xdg_state_home(monkeypatch):
+    from ironmcp.registry import _default_dir
+
+    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+    monkeypatch.setenv("XDG_STATE_HOME", "/xdg/state")
+    assert _default_dir() == os.path.join("/xdg/state", "ironmcp")
+
+
+def test_default_dir_final_fallback_is_local_state(monkeypatch):
+    from ironmcp.registry import _default_dir
+
+    monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+    monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+    monkeypatch.setenv("HOME", "/home/tester")
+    assert _default_dir() == os.path.join("/home/tester", ".local", "state", "ironmcp")

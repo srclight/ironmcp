@@ -27,7 +27,7 @@ class CleanQuit:
         self,
         steps: list[_Step],
         *,
-        on_error: Optional[Callable[[int, BaseException], None]] = None,
+        on_error: Optional[Callable[[int, Exception], None]] = None,
     ) -> None:
         self._steps = list(steps)
         self._on_error = on_error
@@ -47,8 +47,14 @@ class CleanQuit:
             try:
                 await step()
             except Exception as e:  # noqa: BLE001 - fencing is the point
+                # The error HANDLER is itself fenced: a throwing on_error must NOT abort the
+                # remaining shutdown steps (#5). A step failing is expected; a reporting hook
+                # that also fails cannot be allowed to strand telemetry-flush / window-destroy.
                 if self._on_error is not None:
-                    self._on_error(i, e)
+                    try:
+                        self._on_error(i, e)
+                    except Exception:  # noqa: BLE001 - the handler does not get to break the chain
+                        pass
 
 
 def reply_then_quit(

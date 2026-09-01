@@ -22,6 +22,16 @@ describe("bearerOk (constant-time, fail closed — invariant #4)", () => {
   it("a token that is a prefix of the secret is rejected (length-checked)", () => {
     expect(bearerOk("Bearer s3cret", token)).toBe(false);
   });
+  it("rejects an EQUAL-LENGTH wrong token (exercises the timingSafeEqual false branch, not the length short-circuit)", () => {
+    // Same length as "s3cret-token" (12 chars) but wrong — a stub that returned true for any
+    // equal-length input would pass every OTHER negative test, which all differ in length. This
+    // is the one that forces the constant-time compare itself to return false.
+    const wrong = "X3cret-token";
+    expect(wrong.length).toBe(token.length);
+    expect(bearerOk(`Bearer ${wrong}`, token)).toBe(false);
+    // and a same-length token differing only in the LAST byte
+    expect(bearerOk("Bearer s3cret-tokeX", "s3cret-tokeY")).toBe(false);
+  });
 });
 
 describe("HostGuard (DNS-rebinding, default ON — invariant #4)", () => {
@@ -42,5 +52,17 @@ describe("HostGuard (DNS-rebinding, default ON — invariant #4)", () => {
     const strict = new HostGuard(["localhost:8080"], { allowPortlessMatch: false });
     expect(strict.accepts("localhost:8080")).toBe(true);
     expect(strict.accepts("localhost")).toBe(false);
+  });
+  it("host matching is CASE-INSENSITIVE (HTTP Host is case-insensitive, RFC 7230)", () => {
+    // "Localhost" / "LOCALHOST" must match a "localhost" allowlist entry, and a mixed-case
+    // allowlist entry must match a lower-case incoming host — both sides fold to lower case.
+    expect(guard.accepts("Localhost")).toBe(true);
+    expect(guard.accepts("LOCALHOST:8080")).toBe(true);
+    expect(guard.accepts("Wasabi.Local:18888")).toBe(true);
+    const mixed = new HostGuard(["MyHost.Local", "127.0.0.1"]);
+    expect(mixed.accepts("myhost.local")).toBe(true);
+    expect(mixed.accepts("MYHOST.LOCAL:9000")).toBe(true);
+    // a genuinely foreign host is still refused regardless of case
+    expect(guard.accepts("EVIL.example.com")).toBe(false);
   });
 });

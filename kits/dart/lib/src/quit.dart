@@ -26,7 +26,12 @@ class CleanQuit {
       try {
         await steps[i]();
       } catch (e) {
-        onError?.call(i, e);
+        // The error handler is itself fenced: a throwing onError must NOT abort
+        // the remaining steps — otherwise one bad reporter strands the shutdown
+        // sequence, the very failure this scaffold exists to prevent.
+        try {
+          onError?.call(i, e);
+        } catch (_) {}
       }
     }
   }
