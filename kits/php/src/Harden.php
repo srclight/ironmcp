@@ -25,13 +25,35 @@ final class Harden
      */
     public static function server(Builder $builder, string $reconnectHint = Messages::DEFAULT_RECONNECT_HINT): Server
     {
+        return self::serveHardened($builder, reconnectHint: $reconnectHint)->server;
+    }
+
+    /**
+     * The one-call convenience serve entry. Hardens the builder exactly as {@see server()} does
+     * (strict-args guard + every tool schema stamped closed) AND, when [allowedHosts] is given,
+     * builds the DNS-rebinding {@see HostGuard} (invariant #4) and returns it alongside the server so
+     * a caller of the CONVENIENCE path — not only the low-level HostGuard constructor — can enable
+     * the guard. PHP serving is PHP-FPM/PSR-15-shaped, so the returned {@see HardenedApp::$hostGuard}
+     * is enforced by the app's HTTP front controller before dispatch (see {@see HardenedApp}).
+     *
+     * @param iterable<string>|null $allowedHosts hosts the server legitimately answers as; when
+     *                                            non-null a default-deny HostGuard is built and any
+     *                                            other (rebinding) Host is refused. null opts out.
+     */
+    public static function serveHardened(
+        Builder $builder,
+        ?iterable $allowedHosts = null,
+        string $reconnectHint = Messages::DEFAULT_RECONNECT_HINT,
+    ): HardenedApp {
         $registry = new Registry();
         $builder->setRegistry($registry);
         $builder->addRequestHandler(new StrictArgsHandler($registry, $reconnectHint));
         $server = $builder->build();
         self::registry($registry);
 
-        return $server;
+        $hostGuard = $allowedHosts !== null ? new HostGuard($allowedHosts) : null;
+
+        return new HardenedApp($server, $hostGuard);
     }
 
     /** Stamp additionalProperties:false onto every registered tool schema (post-build primitive). */

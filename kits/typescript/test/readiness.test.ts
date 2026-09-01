@@ -75,6 +75,27 @@ describe("ReadinessReport", () => {
     expect((j.data_files as Record<string, unknown>[])[0].found).toBe(true);
   });
 
+  it("omits absent optional fields: an empty/absent requires, and a data file with no path", () => {
+    // The OMISSION branches: featureToJson drops `requires` when empty or absent, and
+    // dataFileToJson drops `path` when absent — the false-branch of each `!= null`/length guard.
+    const j = new ReadinessReport({
+      appVersion: "1",
+      features: [
+        { id: "a", label: "A", status: "ready" }, // requires absent
+        { id: "b", label: "B", status: "ready", requires: [] }, // requires present but empty
+      ],
+      dataFiles: [{ label: "dict", found: false }], // path absent
+    }).toJSON();
+    const feats = j.features as Record<string, unknown>[];
+    expect(feats[0]).not.toHaveProperty("requires");
+    expect(feats[1]).not.toHaveProperty("requires"); // empty array is dropped, not emitted as []
+    expect(feats[0]).not.toHaveProperty("details");
+    expect(feats[0]).not.toHaveProperty("reason");
+    const files = j.data_files as Record<string, unknown>[];
+    expect(files[0]).not.toHaveProperty("path");
+    expect(files[0].found).toBe(false);
+  });
+
   it("a lib with no symbol counts still serialises symbols_checked/ok as 0", () => {
     const j = new ReadinessReport({
       appVersion: "1",

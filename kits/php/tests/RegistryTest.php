@@ -306,6 +306,97 @@ final class RegistryTest extends TestCase
     }
 
     /**
+     * Gap: Registry::defaultDir() — the XDG precedence that is the linchpin of cross-kit discovery
+     * ("a Dart server and a PHP server share ONE file"). Every other test injects an explicit dir:,
+     * so this resolution was never exercised. Precedence: XDG_RUNTIME_DIR, then XDG_STATE_HOME, then
+     * $HOME/.local/state, then './.local/state' — always with '/ironmcp' appended.
+     */
+    public function testDefaultDirXdgPrecedence(): void
+    {
+        $keys = ['XDG_RUNTIME_DIR', 'XDG_STATE_HOME', 'HOME'];
+        $saved = [];
+        foreach ($keys as $k) {
+            $saved[$k] = getenv($k); // false when unset
+        }
+
+        try {
+            // 1. XDG_RUNTIME_DIR wins over everything else.
+            putenv('XDG_RUNTIME_DIR=/run/user/1000');
+            putenv('XDG_STATE_HOME=/state');
+            putenv('HOME=/home/tim');
+            $this->assertSame('/run/user/1000/ironmcp', Registry::defaultDir());
+
+            // 2. No runtime dir -> XDG_STATE_HOME.
+            putenv('XDG_RUNTIME_DIR');
+            $this->assertSame('/state/ironmcp', Registry::defaultDir());
+
+            // 3. Neither XDG var -> $HOME/.local/state.
+            putenv('XDG_STATE_HOME');
+            $this->assertSame('/home/tim/.local/state/ironmcp', Registry::defaultDir());
+
+            // 4. No HOME either -> the '.' fallback.
+            putenv('HOME');
+            $this->assertSame('./.local/state/ironmcp', Registry::defaultDir());
+        } finally {
+            foreach ($saved as $k => $v) {
+                $v === false ? putenv($k) : putenv("{$k}={$v}");
+            }
+        }
+    }
+
+    /**
+     * Gap: the ONE place PHP could silently diverge from a peer. PHP/Dart use `??`, so an EMPTY
+     * XDG_RUNTIME_DIR ('' — set but blank) is USED, yielding base '' and dir '/ironmcp'. The TS
+     * (`||`) and Python (`or`) peers instead skip an empty XDG var. This pins PHP's documented
+     * `??`-semantics so the cross-kit inconsistency can never drift unnoticed.
+     */
+    public function testDefaultDirUsesAnEmptyXdgVarPerPhpNullCoalescing(): void
+    {
+        $keys = ['XDG_RUNTIME_DIR', 'XDG_STATE_HOME', 'HOME'];
+        $saved = [];
+        foreach ($keys as $k) {
+            $saved[$k] = getenv($k);
+        }
+
+        try {
+            putenv('XDG_RUNTIME_DIR='); // set-but-empty: `??` keeps '' (unlike `||`/`or`)
+            putenv('XDG_STATE_HOME=/state');
+            putenv('HOME=/home/tim');
+            $this->assertSame('/ironmcp', Registry::defaultDir(), 'an empty XDG var is USED under `??`, giving base ""');
+        } finally {
+            foreach ($saved as $k => $v) {
+                $v === false ? putenv($k) : putenv("{$k}={$v}");
+            }
+        }
+    }
+
+    /**
+     * Gap: discover()'s disk -> RegistryEntry::fromArray round-trip of a POPULATED capabilities map
+     * must return the map INTACT — this is the actual cross-kit interop READ path (a Dart/Node writer
+     * stores {screenshot:true}, a PHP consumer reads it back as an associative array via the
+     * stdClass -> (array) cast). The empty-{} and on-disk-text cases are covered elsewhere; this pins
+     * the populated read itself, not merely how it was written.
+     */
+    public function testDiscoverReturnsAPopulatedCapabilitiesMapIntact(): void
+    {
+        $reg = new Registry(dir: $this->dir, isPidAlive: static fn (int $_): bool => true);
+        $reg->register(new RegistryEntry(
+            id: 'srv',
+            namespace: 'ns',
+            pid: 1,
+            capabilities: ['screenshot' => true, 'annotate' => false, 'max' => 16],
+        ));
+
+        $found = $reg->discover();
+        $this->assertCount(1, $found);
+        $this->assertSame(
+            ['screenshot' => true, 'annotate' => false, 'max' => 16],
+            $found[0]->capabilities,
+            'a populated capabilities map must round-trip through discover() as an intact assoc array',
+        );
+    }
+
+    /**
      * Dart reads `capabilities` as a Map; a JSON [] would decode to a Dart List and throw. PHP
      * cannot distinguish [] from {} once decoded to an associative array, so an empty-capabilities
      * entry must survive REPEATED rewrites as {} on disk — never degrade to []. Guards the

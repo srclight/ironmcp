@@ -60,9 +60,23 @@ class HostGuard {
     if (hostHeader == null || hostHeader.isEmpty) return false;
     final host = hostHeader.toLowerCase();
     if (allowedHosts.contains(host)) return true;
-    if (allowPortlessMatch && allowedHosts.contains(host.split(':').first)) {
+    if (allowPortlessMatch && allowedHosts.contains(_stripPort(host))) {
       return true;
     }
     return false;
+  }
+
+  /// The host with any trailing `:port` removed, for the portless-match branch.
+  /// A bracketed IPv6 literal (`[::1]:8080`) keeps its brackets and drops only
+  /// the port AFTER the closing `]` — a naive `split(':').first` would return
+  /// `[` and reject an allowlisted `[::1]`. A hostname/IPv4 (`localhost:8080`,
+  /// `127.0.0.1:8080`) still strips at the single `:`.
+  static String _stripPort(String host) {
+    if (host.startsWith('[')) {
+      final close = host.indexOf(']');
+      if (close >= 0) return host.substring(0, close + 1); // keep `[...]`
+      return host; // malformed (no closing bracket): leave unchanged
+    }
+    return host.split(':').first;
   }
 }

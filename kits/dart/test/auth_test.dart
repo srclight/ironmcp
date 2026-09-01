@@ -76,5 +76,31 @@ void main() {
       expect(strict.accepts('localhost'), isTrue);
       expect(strict.accepts('localhost:8888'), isFalse); // port not stripped
     });
+
+    // GAP (canonical fix #2): a bracketed IPv6 Host literal must strip the port
+    // only AFTER the closing ']'. A naive host.split(':').first turns
+    // '[::1]:8080' into '[' and rejects an allowlisted '[::1]'. Both the
+    // portless and the ported forms must match an allowlisted '[::1]'.
+    test('an IPv6 bracketed host [::1] matches with and without a port', () {
+      final g = HostGuard(allowedHosts: ['[::1]', 'localhost']);
+      expect(g.accepts('[::1]'), isTrue); // exact match
+      expect(g.accepts('[::1]:8080'), isTrue); // port stripped after ']', not at first ':'
+      expect(g.accepts('[::1]:18888'), isTrue); // any port on the allowed v6 literal
+    });
+
+    test('a non-allowlisted IPv6 literal is still rejected (guard stays default-ON)',
+        () {
+      final g = HostGuard(allowedHosts: ['[::1]']);
+      expect(g.accepts('[2001:db8::1]'), isFalse);
+      expect(g.accepts('[2001:db8::1]:8080'), isFalse);
+    });
+
+    test('allowPortlessMatch:false requires the exact bracketed host[:port]', () {
+      final strict =
+          HostGuard(allowedHosts: ['[::1]:8080'], allowPortlessMatch: false);
+      expect(strict.accepts('[::1]:8080'), isTrue); // exact
+      expect(strict.accepts('[::1]'), isFalse); // portless does not match a ported entry
+      expect(strict.accepts('[::1]:9999'), isFalse); // wrong port
+    });
   });
 }

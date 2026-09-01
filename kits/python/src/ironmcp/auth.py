@@ -82,9 +82,22 @@ class HostGuard:
         host = host_header.lower()
         if host in self.allowed_hosts:
             return True
-        if self.allow_portless_match and host.split(":", 1)[0] in self.allowed_hosts:
+        if self.allow_portless_match and self._strip_port(host) in self.allowed_hosts:
             return True
         return False
+
+    @staticmethod
+    def _strip_port(host: str) -> str:
+        """Drop a trailing ``:port`` while keeping a bracketed IPv6 literal intact. A naive
+        ``split(":", 1)`` turns ``[::1]:8080`` into ``[`` — the port must be stripped only
+        AFTER the closing ``]`` for a bracketed IPv6 host."""
+        if host.startswith("["):
+            close = host.find("]")
+            if close != -1:
+                # keep "[::1]"; drop an optional ":8080" that follows the bracket
+                return host[: close + 1]
+            return host  # malformed; leave as-is
+        return host.split(":", 1)[0]
 
 
 async def _send_403(send: Callable[[dict], Awaitable]) -> None:

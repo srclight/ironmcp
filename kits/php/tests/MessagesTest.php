@@ -50,6 +50,27 @@ final class MessagesTest extends TestCase
      * Gap #8: a zero-argument tool's accepted set is empty, so the message must read
      * "accepts: (no arguments)" rather than an empty "accepts: .".
      */
+    /**
+     * Gap: the refusal caps the key COUNT at MAX_ENUMERATED but does NOT bound an individual key
+     * NAME's length — a deliberate corpus-wide choice shared with the TS and Python peers (the count
+     * cap is the bound, so all four kits stay byte-identical). This pins BOTH halves of that boundary
+     * so it cannot drift silently: (a) the count is capped even when names are long, and (b) a single
+     * long key name IS echoed in full rather than truncated. If a future change bounds name length,
+     * it must be a coordinated cross-kit change and this test must move with it.
+     */
+    public function testKeyNameLengthIsNotBoundedOnlyTheCount(): void
+    {
+        // (a) count still capped: 12 long keys -> only 10 shown, "and 2 more".
+        $long = array_map(static fn (int $i): string => str_repeat('x', 200) . $i, range(0, 11));
+        $m = Messages::unknownArgs('echo', $long, ['a']);
+        $this->assertStringContainsString('and 2 more', $m);
+
+        // (b) a single long key name is echoed verbatim (name length is not truncated).
+        $huge = str_repeat('q', 5000);
+        $m2 = Messages::unknownArgs('echo', [$huge], ['a']);
+        $this->assertStringContainsString($huge, $m2, 'the count-only cap echoes a long single key name in full');
+    }
+
     public function testZeroArgToolSaysNoArguments(): void
     {
         $m = Messages::unknownArgs('ping', ['typo'], []);

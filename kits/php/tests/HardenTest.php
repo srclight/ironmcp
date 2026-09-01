@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace IronMcp\Tests;
 
 use IronMcp\Harden;
+use IronMcp\HostGuard;
 use IronMcp\StrictArgsHandler;
 use Mcp\Capability\Registry;
 use Mcp\Schema\Request\CallToolRequest;
 use Mcp\Schema\Result\CallToolResult;
 use Mcp\Schema\Tool;
+use Mcp\Server;
 use Mcp\Server\Session\SessionInterface;
 use PHPUnit\Framework\TestCase;
 
@@ -106,6 +108,46 @@ final class HardenTest extends TestCase
 
         // The normal tool alongside them IS stamped closed.
         $this->assertFalse($r->getTool('closable')->tool->inputSchema['additionalProperties']);
+    }
+
+    private function builderWithSearch(): Server\Builder
+    {
+        return Server::builder()
+            ->setServerInfo('search', '1.0.0')
+            ->addTool(
+                static fn (string $query): string => $query,
+                name: 'search',
+                inputSchema: ['type' => 'object', 'properties' => ['query' => ['type' => 'string']], 'required' => ['query']],
+            );
+    }
+
+    /**
+     * Cross-cutting fix #1: the one-call convenience serve entry must FORWARD an allowedHosts list
+     * into the DNS-rebinding HostGuard (invariant #4), so a user of the convenience path — not only
+     * the low-level HostGuard constructor — can enable the guard. A convenience-served app must then
+     * refuse a rebinding Host while still answering the hosts it legitimately serves.
+     */
+    public function testConvenienceServeForwardsAllowedHostsIntoTheGuard(): void
+    {
+        $app = Harden::serveHardened($this->builderWithSearch(), allowedHosts: ['wasabi.local', 'localhost']);
+
+        $this->assertInstanceOf(Server::class, $app->server, 'the hardened server is still built');
+        $this->assertInstanceOf(HostGuard::class, $app->hostGuard, 'allowedHosts must build a HostGuard');
+
+        // The convenience-served app refuses a rebinding attacker's Host...
+        $this->assertFalse($app->hostGuard->accepts('evil.example.com'));
+        $this->assertFalse($app->hostGuard->accepts('evil.example.com:8888'));
+        // ...while still accepting the hosts it was told it legitimately serves (with or without port).
+        $this->assertTrue($app->hostGuard->accepts('wasabi.local'));
+        $this->assertTrue($app->hostGuard->accepts('localhost:18888'));
+    }
+
+    /** Without allowedHosts the convenience opts the guard out (hostGuard is null), server still built. */
+    public function testConvenienceServeWithoutAllowedHostsHasNoGuard(): void
+    {
+        $app = Harden::serveHardened($this->builderWithSearch());
+        $this->assertInstanceOf(Server::class, $app->server);
+        $this->assertNull($app->hostGuard, 'no allowedHosts -> guard opted out');
     }
 
     public function testTheRefusalNeverEchoesAValue(): void

@@ -94,6 +94,28 @@ describe("IronMcpRegistry", () => {
     expect(j.started_at).toBe("2026-09-01T10:35:34.123Z");
   });
 
+  it("toJSON omits absent optional fields (host/port/transport/version/code_sha), always emits capabilities", () => {
+    // The OMISSION branch of each `!= null` guard in toJSON: a minimal entry carries none of the
+    // optional wire fields, but capabilities ({} by default) and started_at are always present.
+    const j = new IronMcpEntry({ id: "m", namespace: "ns", pid: 7 }).toJSON();
+    for (const k of ["host", "port", "transport", "version", "code_sha"]) {
+      expect(j).not.toHaveProperty(k);
+    }
+    expect(j.capabilities).toEqual({}); // default {} still serialised
+    expect(j).toMatchObject({ id: "m", namespace: "ns", pid: 7 });
+    expect(typeof j.started_at).toBe("string");
+    // and when present, they ARE emitted (the true-branch twin)
+    const full = new IronMcpEntry({
+      id: "f",
+      namespace: "ns",
+      pid: 8,
+      host: "127.0.0.1",
+      port: 8745,
+      transport: "streamable-http",
+    }).toJSON();
+    expect(full).toMatchObject({ host: "127.0.0.1", port: 8745, transport: "streamable-http" });
+  });
+
   it("discover's prune is PERSISTED: a FRESH registry instance re-reading disk sees the dead entry gone (#10)", async () => {
     // Not just an in-memory re-prune — write the dead entry, prune via one instance, then open a
     // BRAND-NEW registry (that always reports pids alive) and confirm the dead entry is truly gone

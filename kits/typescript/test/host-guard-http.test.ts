@@ -44,6 +44,21 @@ describe("host guard over HTTP (default ON — invariant #4)", () => {
     expect(await raw(8788, "127.0.0.1:8788", "/mcp")).toBe(401);
   });
 
+  it("forwards an explicit allowedHosts into the guard on the convenience serve path", async () => {
+    // The one-call convenience entrypoint must let a caller ENABLE the rebinding guard with a
+    // custom allowlist (invariant #4). Only "trusted.example" is allowed here; the default
+    // localhost/127.0.0.1 derivation is replaced, so even localhost is refused.
+    const srv = await serveHttp(probeFactory(), {
+      token: "secret",
+      port: 8786,
+      allowedHosts: ["trusted.example", "trusted.example:8786"],
+    });
+    close = srv.close;
+    expect(await raw(8786, "trusted.example:8786", "/mcp")).toBe(401); // allowed host -> bearer gate
+    expect(await raw(8786, "evil.example.com", "/mcp")).toBe(403); // rebinding host refused
+    expect(await raw(8786, "localhost:8786", "/mcp")).toBe(403); // not in the custom allowlist
+  });
+
   it("hostGuard:false disables the check (opt-out)", async () => {
     const srv = await serveHttp(probeFactory(), { token: "secret", port: 8787, hostGuard: false });
     close = srv.close;

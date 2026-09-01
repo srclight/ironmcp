@@ -95,4 +95,52 @@ void main() {
     final j = LibraryStatus(name: 'libnomad', loaded: true).toJson();
     expect(j.containsKey('error'), isFalse);
   });
+
+  // GAP: FeatureReadiness.toJson never serialized the optional `details`/`reason`
+  // branches — both `if (x != null)` arms were uncovered. Pin the PRESENT arm.
+  test('FeatureReadiness serializes details and reason when they are set', () {
+    final j = FeatureReadiness(
+      id: 'ffi',
+      label: 'FFI',
+      status: ReadinessStatus.degraded,
+      requires: ['libnomad'],
+      details: 'loaded 2 of 3 symbols',
+      reason: 'optional symbol nomad_speak missing',
+    ).toJson();
+    expect(j['details'], 'loaded 2 of 3 symbols');
+    expect(j['reason'], 'optional symbol nomad_speak missing');
+    expect(j['requires'], ['libnomad']);
+  });
+
+  // GAP: the OMISSION arm — with details/reason (and an empty requires) null,
+  // none of those keys appear in the JSON.
+  test('FeatureReadiness omits details, reason, and empty requires', () {
+    final j = FeatureReadiness(
+      id: 'core',
+      label: 'Core',
+      status: ReadinessStatus.ready,
+    ).toJson();
+    expect(j.containsKey('details'), isFalse);
+    expect(j.containsKey('reason'), isFalse);
+    expect(j.containsKey('requires'), isFalse); // empty list is omitted, not []
+    expect(j['status'], 'ready');
+  });
+
+  // GAP: DataFileStatus with found:false and an absent path — only the
+  // found+path branch was asserted, so the `if (path != null)` omission arm was
+  // uncovered. A missing data file must serialize found:false with NO path key.
+  test('DataFileStatus omits path when the file was not found', () {
+    final j = DataFileStatus(label: 'dict', found: false).toJson();
+    expect(j['label'], 'dict');
+    expect(j['found'], isFalse);
+    expect(j.containsKey('path'), isFalse); // absent-path omission arm
+  });
+
+  test('DataFileStatus carries the path when the file was found', () {
+    final j =
+        DataFileStatus(label: 'dict', found: true, path: '/opt/data/dict.xdb')
+            .toJson();
+    expect(j['found'], isTrue);
+    expect(j['path'], '/opt/data/dict.xdb');
+  });
 }

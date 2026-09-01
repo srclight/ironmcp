@@ -111,3 +111,20 @@ def test_to_json_omits_optional_none_fields():
 
     data = DataFileStatus(label="dict", found=False).to_json()
     assert "path" not in data
+
+
+def test_to_json_emits_optional_fields_when_present():
+    """The EMIT branches (the normal degraded/failed path): details/reason (feature) and
+    error (lib) are carried through to the JSON verbatim when populated."""
+    feat = FeatureReadiness(
+        id="a",
+        label="A",
+        status=ReadinessStatus.degraded,
+        details="native lib missing",
+        reason="libfoo.so not found on the load path",
+    ).to_json()
+    assert feat["details"] == "native lib missing"
+    assert feat["reason"] == "libfoo.so not found on the load path"
+
+    lib = LibraryStatus(name="libfoo", loaded=False, error="dlopen failed").to_json()
+    assert lib["error"] == "dlopen failed"

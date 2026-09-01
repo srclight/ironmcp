@@ -35,6 +35,15 @@ describe("serveHttp", () => {
     expect(body.capabilities.strict_args).toBe(true);
   });
 
+  it("/healthz defaults capabilities to {strict_args:true, ironmcp:true} when none are supplied", async () => {
+    // The default-caps branch of buildHttpHandler: no capabilities passed -> the ironmcp default
+    // payload is advertised, so a probing agent sees the guarantee without the app naming it.
+    const srv = await serveHttp(probeFactory(), { token: "secret", port: 8785 });
+    close = srv.close;
+    const body: any = await (await fetch(srv.url + "/healthz")).json();
+    expect(body.capabilities).toEqual({ strict_args: true, ironmcp: true });
+  });
+
   it("/mcp requires a bearer token", async () => {
     const srv = await serveHttp(probeFactory(), { token: "secret", port: 8797 });
     close = srv.close;

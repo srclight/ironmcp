@@ -23,6 +23,11 @@ describe("unknownArgsMessage", () => {
     expect(m).toContain("U+FF41");
     expect(m).toContain("which IS accepted");
   });
+  it("names '(no arguments)' when the accepted set is empty (a zero-arg tool refusing an extra)", () => {
+    const m = unknownArgsMessage("ping", ["typo"], []);
+    expect(m).toContain("accepts: (no arguments)");
+    expect(m).toContain("unknown argument(s): typo");
+  });
   it("ends with the reconnect hint", () => {
     const m = unknownArgsMessage("echo", ["typo"], ["a"], "check status and reconnect");
     expect(m.trimEnd()).toMatch(/check status and reconnect\.$/);

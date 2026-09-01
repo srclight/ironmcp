@@ -69,13 +69,23 @@ def serve_http(
     healthz: bool = True,
     capabilities: dict | None = None,
     code_sha: str | None = None,
+    allowed_hosts: Iterable[str] | None = None,
 ) -> None:
-    """Build the composite app and run it under uvicorn. Fails closed on an empty token."""
+    """Build the composite app and run it under uvicorn. Fails closed on an empty token.
+
+    Pass ``allowed_hosts`` to enable the default-deny DNS-rebinding :class:`~ironmcp.auth.HostGuard`
+    (invariant #4) — the convenience serving path forwards it to :func:`build_http_app`, so a
+    user who serves in one call can still reach the host guard."""
     import uvicorn
 
     uvicorn.run(
         build_http_app(
-            server, token=token, healthz=healthz, capabilities=capabilities, code_sha=code_sha
+            server,
+            token=token,
+            healthz=healthz,
+            capabilities=capabilities,
+            code_sha=code_sha,
+            allowed_hosts=allowed_hosts,
         ),
         host=host,
         port=port,

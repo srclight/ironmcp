@@ -149,6 +149,54 @@ def test_healthz_false_omits_the_health_route():
         assert client.get("/healthz").status_code == 401
 
 
+def test_serve_http_forwards_allowed_hosts_to_the_host_guard(monkeypatch):
+    """serve_http — the documented 'serve in one call' convenience path — must forward
+    allowed_hosts into build_http_app so a convenience-served app can enable the DNS-rebinding
+    guard (invariant #4). uvicorn.run is stubbed to capture the composed app, then the app is
+    exercised directly: a rebinding Host is 403, a listed Host with no token reaches the 401."""
+    import sys
+    import types
+
+    from starlette.testclient import TestClient
+
+    from ironmcp import serve_http
+
+    captured = {}
+
+    fake_uvicorn = types.ModuleType("uvicorn")
+    fake_uvicorn.run = lambda app, **kw: captured.update(app=app, kw=kw)
+    monkeypatch.setitem(sys.modules, "uvicorn", fake_uvicorn)
+
+    serve_http(_server(), token="secret", port=0, allowed_hosts=["good.local"])
+
+    assert "app" in captured, "serve_http never built/ran an app"
+    with TestClient(captured["app"]) as client:
+        assert client.post("/mcp", json={}, headers={"Host": "evil.example.com"}).status_code == 403
+        assert client.post("/mcp", json={}, headers={"Host": "good.local"}).status_code == 401
+
+
+def test_serve_http_without_allowed_hosts_leaves_the_host_guard_off(monkeypatch):
+    """The default (allowed_hosts=None) must NOT layer a host guard — a loopback dev server
+    that serves in one call is not locked out by accident; any Host reaches the bearer 401."""
+    import sys
+    import types
+
+    from starlette.testclient import TestClient
+
+    from ironmcp import serve_http
+
+    captured = {}
+    fake_uvicorn = types.ModuleType("uvicorn")
+    fake_uvicorn.run = lambda app, **kw: captured.update(app=app)
+    monkeypatch.setitem(sys.modules, "uvicorn", fake_uvicorn)
+
+    serve_http(_server(), token="secret", port=0)
+
+    with TestClient(captured["app"]) as client:
+        # no host guard: an arbitrary Host still reaches the bearer (401), not 403
+        assert client.post("/mcp", json={}, headers={"Host": "evil.example.com"}).status_code == 401
+
+
 def test_default_capabilities_when_none_supplied():
     """capabilities=None -> the built-in default {'strict_args':True,'ironmcp':True}."""
     from starlette.testclient import TestClient

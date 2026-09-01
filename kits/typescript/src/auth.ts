@@ -31,7 +31,19 @@ export class HostGuard {
     if (!hostHeader) return false;
     const host = hostHeader.toLowerCase();
     if (this.allowedHosts.has(host)) return true;
-    if (this.allowPortlessMatch && this.allowedHosts.has(host.split(":")[0])) return true;
+    if (this.allowPortlessMatch && this.allowedHosts.has(stripPort(host))) return true;
     return false;
   }
+}
+
+/** Drop a trailing `:port` from a Host header, correctly for a bracketed IPv6 literal. A naive
+ *  split on ":" turns "[::1]:8080" into "[" (the first colon is INSIDE the address). For a
+ *  bracketed literal the host runs up to and INCLUDING the closing "]"; the port, if any, follows
+ *  it. Only an unbracketed host (a name or IPv4) is safe to split on the first colon. */
+function stripPort(host: string): string {
+  if (host.startsWith("[")) {
+    const end = host.indexOf("]");
+    return end >= 0 ? host.slice(0, end + 1) : host; // "[::1]:8080" -> "[::1]"
+  }
+  return host.split(":")[0];
 }

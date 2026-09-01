@@ -88,6 +88,23 @@ final class AuthTest extends TestCase
     }
 
     /**
+     * A bracketed IPv6 Host literal must parse correctly: "[::1]" matches an "[::1]" allowlist entry,
+     * and "[::1]:8080" must strip the port only AFTER the closing "]" — a naive split on the first
+     * ":" would truncate it to "[" and wrongly reject a legitimate localhost-over-IPv6 request.
+     */
+    public function testBracketedIpv6HostParsesHostNotOpeningBracket(): void
+    {
+        $guard = new HostGuard(['[::1]', 'localhost']);
+        $this->assertTrue($guard->accepts('[::1]'), 'a bare bracketed IPv6 literal must match');
+        $this->assertTrue($guard->accepts('[::1]:8080'), 'the port after "]" must be stripped, leaving "[::1]"');
+        // A different bracketed IPv6 host is still refused.
+        $this->assertFalse($guard->accepts('[::2]'));
+        $this->assertFalse($guard->accepts('[2001:db8::1]:443'));
+        // Uppercase hex folds too (Host is case-insensitive), and the port is still stripped.
+        $this->assertTrue((new HostGuard(['[fe80::1]']))->accepts('[FE80::1]:9000'));
+    }
+
+    /**
      * Gap #13: the guards must actually GATE a request, not merely answer `accepts()` in isolation.
      * The kit's docstrings state the live 401/403 wiring is composed into the transport by the app;
      * here we drive that composition — a request gate that reads the `Host` and `Authorization`

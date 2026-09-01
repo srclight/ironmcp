@@ -137,4 +137,26 @@ describe("guardCallTool + guardListTools (the primary primitives, composed by ha
       expect((await c.callTool({ name: "echo", arguments: { a: "x", b: "y" } }) as any).isError).toBeFalsy();
     } finally { await close(); }
   });
+
+  it("the STANDALONE guardCallTool refusal carries the same structuredContent.ironmcp twin", async () => {
+    // guardServer's guardedCall asserts structuredContent elsewhere; the standalone builder is a
+    // near-duplicate, so pin it too — a divergence in this path would otherwise go uncaught.
+    const schemas = new Map<string, any>();
+    const s = new Server({ name: "probe", version: "0" }, { capabilities: { tools: {} } });
+    s.setRequestHandler(ListToolsRequestSchema, guardListTools(async () => ({ tools: TOOLS }), schemas));
+    s.setRequestHandler(
+      CallToolRequestSchema,
+      guardCallTool(async (req: any) => ({ content: [{ type: "text", text: `ran ${req.params.name}` }] }), schemas),
+    );
+    const { c, close } = await connect(s as any);
+    try {
+      await c.listTools(); // capture schemas
+      const r = (await c.callTool({ name: "echo", arguments: { a: "x", typo: 1 } })) as any;
+      expect(r.isError).toBe(true);
+      expect(r.structuredContent.ironmcp.refused).toBe(true);
+      expect(r.structuredContent.ironmcp.tool).toBe("echo");
+      expect(r.structuredContent.ironmcp.unknown).toContain("typo");
+      expect(r.structuredContent.ironmcp.accepted).toEqual(expect.arrayContaining(["a", "b"]));
+    } finally { await close(); }
+  });
 });

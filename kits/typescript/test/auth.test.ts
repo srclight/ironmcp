@@ -53,6 +53,20 @@ describe("HostGuard (DNS-rebinding, default ON — invariant #4)", () => {
     expect(strict.accepts("localhost:8080")).toBe(true);
     expect(strict.accepts("localhost")).toBe(false);
   });
+  it("parses a bracketed IPv6 literal, stripping the port only after the closing ']'", () => {
+    // A naive host.split(":")[0] turns "[::1]:8080" into "[" (the first colon is inside the
+    // address), so a bracketed IPv6 client would be wrongly refused. The port must be stripped
+    // only after the closing bracket.
+    const v6 = new HostGuard(["[::1]"]);
+    expect(v6.accepts("[::1]")).toBe(true); // exact
+    expect(v6.accepts("[::1]:8080")).toBe(true); // port stripped after ']'
+    expect(v6.accepts("[::2]:8080")).toBe(false); // a different v6 host is still refused
+    expect(v6.accepts("[")).toBe(false); // the naive-split artefact must NOT match
+    // and a full v6 literal in the allowlist matches with a port too
+    const full = new HostGuard(["[2001:db8::1]"]);
+    expect(full.accepts("[2001:db8::1]")).toBe(true);
+    expect(full.accepts("[2001:db8::1]:18888")).toBe(true);
+  });
   it("host matching is CASE-INSENSITIVE (HTTP Host is case-insensitive, RFC 7230)", () => {
     // "Localhost" / "LOCALHOST" must match a "localhost" allowlist entry, and a mixed-case
     // allowlist entry must match a lower-case incoming host — both sides fold to lower case.

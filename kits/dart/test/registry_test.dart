@@ -60,6 +60,29 @@ void main() {
     expect(e.transport, 'http');
   });
 
+  // GAP: the capabilities map's fromJson->toJson SURVIVAL was never asserted —
+  // the JSON test above only checks it serializes on the way out. Prove a
+  // non-empty, nested capabilities map round-trips through fromJson unchanged.
+  test('capabilities round-trip through fromJson->toJson unchanged', () {
+    final caps = {
+      'strict_args': true,
+      'ironmcp': true,
+      'tools': <String, dynamic>{'count': 16},
+    };
+    final entry = IronMcpEntry(id: 'y', namespace: 'ns', pid: 7, capabilities: caps);
+    final revived = IronMcpEntry.fromJson(entry.toJson());
+    expect(revived.capabilities, caps); // parsed back into the object
+    expect(revived.toJson()['capabilities'], caps); // and re-emitted intact
+  });
+
+  // GAP: an entry constructed with NO capabilities still emits an (empty) map,
+  // and that empty map survives the round-trip — capabilities is never dropped.
+  test('a default entry emits an empty capabilities map that round-trips', () {
+    final j = IronMcpEntry(id: 'z', namespace: 'ns', pid: 8).toJson();
+    expect(j['capabilities'], <String, dynamic>{});
+    expect(IronMcpEntry.fromJson(j).capabilities, <String, dynamic>{});
+  });
+
   // TASK 2 — the CANONICAL registry started_at format. Every ironmcp kit MUST
   // emit this exact shape so registry.json is byte-identical across languages:
   // ISO-8601 UTC, MILLISECOND precision (exactly 3 fractional digits), trailing

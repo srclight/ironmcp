@@ -100,6 +100,25 @@ def test_host_match_is_case_insensitive_allowlist_entry():
     assert g.accepts("localhost:9000") is True
 
 
+# --- bracketed IPv6 literals: strip the port only AFTER the closing ] ------------------
+
+
+def test_accepts_bracketed_ipv6_literal_with_and_without_a_port():
+    """A naive host.split(':',1)[0] turns '[::1]:8080' into '[' and locks out an IPv6 loopback
+    server. The port must be stripped only after the closing bracket."""
+    g = HostGuard(allowed_hosts=["[::1]"])
+    assert g.accepts("[::1]") is True
+    assert g.accepts("[::1]:8080") is True
+    # a different IPv6 literal is still refused
+    assert g.accepts("[::2]:8080") is False
+
+
+def test_bracketed_ipv6_match_is_case_insensitive_and_full_address():
+    g = HostGuard(allowed_hosts=["[fe80::1]"])
+    assert g.accepts("[FE80::1]") is True
+    assert g.accepts("[fe80::1]:18888") is True
+
+
 # --- non-HTTP scopes pass through BOTH ASGI wrappers untouched -------------------------
 
 

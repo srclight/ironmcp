@@ -41,12 +41,32 @@ final class HostGuard
             return true;
         }
         if ($this->allowPortlessMatch) {
-            $portless = explode(':', $host, 2)[0];
+            $portless = self::stripPort($host);
             if (isset($this->allowedHosts[$portless])) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    /**
+     * Strip a trailing `:port` from a Host header. A bracketed IPv6 literal ("[::1]" or "[::1]:8080")
+     * contains colons inside the brackets, so the port — if present — begins only AFTER the closing
+     * "]"; a naive split on the first ":" would truncate "[::1]:8080" to "[" and break the match.
+     * A plain host/IPv4 keeps the split-on-first-colon behaviour.
+     */
+    private static function stripPort(string $host): string
+    {
+        if (str_starts_with($host, '[')) {
+            $close = strpos($host, ']');
+            if ($close !== false) {
+                return substr($host, 0, $close + 1); // "[::1]" — brackets kept, port dropped
+            }
+
+            return $host; // malformed (no closing bracket): leave as-is, it will simply not match
+        }
+
+        return explode(':', $host, 2)[0];
     }
 }
