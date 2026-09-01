@@ -1,16 +1,25 @@
 name: CI
 
 # PRECONDITION, not a follow-up (pack review, 2026-08-29).
-# Six servers would depend on this package. srclight's only workflow is publish.yml, which runs
-# `python -m build` and publishes WITHOUT running a single test. Shipping a hand-tested chassis
-# through a pipeline that does not test is this project's own failure family one layer up:
-# a declaration of quality that never executes.
+# Six servers would depend on this package. Shipping a hand-tested chassis through a pipeline
+# that does not test is this project's own failure family one layer up: a declaration of
+# quality that never executes. So the tests RUN here, and a green bar means they ran.
+#
+# 2026-08-31: the Python kit moved to kits/python/ in the monorepo restructure (spec/ and
+# conformance/ stay at the repo root, shared by every language kit). Jobs run from the kit
+# directory; the corpus tests read the root conformance/ via a relative path in the checkout.
+# The vendored-form job was removed: the v2-only cutover retired the single-file vendoring
+# model (mcpkit.vendor no longer exists), so the job tested a feature that is gone.
 
 on:
   push:
     branches: [master, develop]
   pull_request:
   workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: kits/python
 
 jobs:
   test:
@@ -31,53 +40,26 @@ jobs:
 
   dependency-rule:
     # STUBBY, 2026-08-29: after publishing, this package becomes a write path into six servers,
-    # one of which ACTS on its input. The "no dependency beyond mcp" condition therefore has to be
-    # ENFORCED rather than assumed -- every added dependency widens that path.
+    # one of which ACTS on its input. The runtime dependency set is therefore ENFORCED, not
+    # assumed -- every added dependency widens that path. The permitted set is mcp (the SDK)
+    # and starlette (the ASGI seam behind make_bearer_asgi); anything else fails the build.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: runtime dependencies must be mcp and nothing else
+      - name: runtime dependencies must be within the permitted set
         run: |
           python - <<'PY'
           import tomllib, sys
           deps = tomllib.load(open("pyproject.toml","rb"))["project"]["dependencies"]
-          names = sorted(d.split(">")[0].split("=")[0].split("[")[0].strip() for d in deps)
-          if names != ["mcp"]:
-              print(f"FAIL: runtime dependencies are {names}; only 'mcp' is permitted.")
+          names = sorted(d.split(">")[0].split("=")[0].split("[")[0].split("<")[0].strip() for d in deps)
+          permitted = ["mcp", "starlette"]
+          extra = [n for n in names if n not in permitted]
+          if extra:
+              print(f"FAIL: runtime dependencies {extra} are outside the permitted set {permitted}.")
               print("Every added dependency widens the supply-chain path into six servers.")
               sys.exit(1)
-          print(f"OK: runtime dependencies = {names}")
+          print(f"OK: runtime dependencies = {names} (within {permitted})")
           PY
-
-  vendored-form:
-    # The single-file build is how public repos adopt the policy without taking a dependency they
-    # cannot resolve. If it ever stops being equivalent to the package, consumers silently run
-    # something else -- so equivalence is asserted, not assumed.
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install -e ".[dev]"
-      - name: generation is deterministic
-        run: |
-          python -m mcpkit.vendor --out /tmp/a.py
-          python -m mcpkit.vendor --out /tmp/b.py
-          cmp /tmp/a.py /tmp/b.py || { echo "FAIL: vendor output is not reproducible"; exit 1; }
-      - name: the hash header detects a hand-edit
-        run: |
-          python -m mcpkit.vendor --check /tmp/a.py
-          sed -i 's/Nothing was executed/Nothing happened/' /tmp/a.py
-          if python -m mcpkit.vendor --check /tmp/a.py; then
-            echo "FAIL: a modified vendored file was accepted"; exit 1
-          fi
-          echo "OK: modification detected"
-      - name: THE SAME test suite must pass against the vendored form
-        run: |
-          mkdir -p /tmp/vend
-          python -m mcpkit.vendor --out /tmp/vend/mcpkit.py
-          PYTHONPATH=/tmp/vend python -m pytest -q
