@@ -46,6 +46,7 @@ class IronMcpDaemon {
     for (var attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         await _bind();
+        _lastError = null; // a retry that ultimately succeeds is not an error
         _running = true;
         return true;
       } on SocketException catch (e) {
