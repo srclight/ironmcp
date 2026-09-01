@@ -53,7 +53,7 @@ class StrictArgsMiddleware(ServerMiddleware):
                 if (
                     isinstance(schema, dict)
                     and schema.get("type") == "object"
-                    and "properties" in schema
+                    and isinstance(schema.get("properties"), dict)
                 ):
                     schema.setdefault("additionalProperties", False)
             return result
@@ -67,9 +67,12 @@ class StrictArgsMiddleware(ServerMiddleware):
             #   * "properties" ABSENT           -> uninstrospectable; stay permissive.
             #   * "properties" PRESENT (even {}) -> refuse extras (a zero-arg tool included).
             #   * additionalProperties is True  -> the author OPTED OUT (passthrough); honour it.
+            # "properties" PRESENT but NOT a map (a string/list — a malformed schema) is
+            # UNINTROSPECTABLE: we cannot know the accepted set, so we stay PERMISSIVE rather
+            # than refuse everything. isinstance(..., dict) is the gate that draws that line.
             if (
                 isinstance(schema, dict)
-                and "properties" in schema
+                and isinstance(schema.get("properties"), dict)
                 and schema.get("additionalProperties") is not True
                 and isinstance(arguments, dict)
             ):

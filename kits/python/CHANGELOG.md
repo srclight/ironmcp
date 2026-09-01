@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.0 — 2026-09-01
+
+The full ironmcp substrate, in parity with the TypeScript, PHP, and Dart kits and proven
+by the shared conformance corpus.
+
+### Added
+- **Self-discovery registry** — a server registers itself; agents enumerate every live
+  ironmcp server (namespace, port, capabilities). Registry file format byte-identical
+  across all four language kits (`started_at` normalised to millisecond-Z).
+- **Structured readiness + health** — a full readiness report (feature / native-library /
+  data-file status with a verdict that excludes environmental blocks) and a lightweight
+  health tool; `code_sha` to detect a server running older code than expected.
+- **Transport hardening** — bearer-guarded `/mcp` (fail-closed, constant-time), an open
+  `/healthz` naming capabilities, and a DNS-rebinding host guard on by default
+  (RFC 7230 case-insensitive, IPv6-bracket aware), with Windows TIME_WAIT port-retry.
+- **Content + clean-quit helpers** — image/binary tool results with an empty-capture
+  guard, and a fenced, ordered, idempotent shutdown scaffold with an honest `quit` tool.
+
 ## 0.3.0 — 2026-08-31
 
 Package renamed **`mcpkit` → `ironmcp`** (flat, v2-only). The MCP v2 port, and the seed of ironmcp-the-standard.

@@ -1,6 +1,6 @@
 # ironmcp
 
-MCP servers that refuse unknown arguments instead of silently dropping them — advertisement == runtime.
+A mistyped argument name should not get a confident answer to the wrong question. ironmcp makes an MCP tool refuse the undeclared argument with a recoverable error and enforce exactly the arguments it advertises — one guarantee, proven by a single conformance corpus, in Python, TypeScript, PHP, and Dart.
 
 Most MCP SDKs validate a tool call against its declared parameters and **silently drop** any
 argument that was not declared. One added letter (`project` → `projects`) yields a confident
@@ -24,6 +24,15 @@ app = strict_server(name="search", version="1.0.0")
 #   unknown argument(s): projet. Tool 'search' accepts: query. Nothing was executed ...
 ```
 
+## More than the guard
+
+The guard is the core, but every kit ships the same substrate from one dependency: a **self-discovery
+registry** (enumerate every live ironmcp server; the registry file is byte-identical across all four
+languages, so a Python server and a Dart server appear in the same list), a **structured
+readiness/health** contract, **hardened serving** (bearer + open `/healthz` + a DNS-rebinding host
+guard on by default), and **content + clean-quit** helpers. ironmcp is a *layer* that works with
+whatever MCP framework you already use — it does not replace it.
+
 ## Read next
 
 - **[AGENTS.md](AGENTS.md)** — the fast path for an AI agent: harden, serve, and prove conformance in copy-paste blocks.
@@ -39,10 +48,13 @@ app = strict_server(name="search", version="1.0.0")
 | Python | `ironmcp` | PyPI | [`kits/python/`](kits/python/) |
 | TypeScript | `ironmcp` | npm | [`kits/typescript/`](kits/typescript/) |
 | PHP | `ironmcp/core` | Packagist | [`kits/php/`](kits/php/) |
+| Dart | `ironmcp` | pub.dev | [`kits/dart/`](kits/dart/) |
 
-See [ROADMAP.md](ROADMAP.md) for what is next (Rust). A kit conforms when a server built with its strict
-layer passes every case in [`conformance/cases/`](conformance/cases/) — and every kit also
-proves the bare server is refused, because a corpus never watched to FAIL is theatre.
+A kit conforms when a server built with its strict layer passes every case in
+[`conformance/cases/`](conformance/cases/) — and every kit also proves the bare server is refused,
+because a corpus never watched to FAIL is theatre. ironmcp runs in a production desktop application's
+live MCP server on **both Linux and Windows**, hardening 60+ tools with zero behaviour change. See
+[ROADMAP.md](ROADMAP.md) for what is next.
 
 ## Harden, deploy, prove
 

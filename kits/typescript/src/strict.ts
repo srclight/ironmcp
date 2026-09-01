@@ -14,12 +14,20 @@ export type ArgCheck =
   | { ok: true }
   | { ok: false; unknown: string[]; accepted: string[]; message: string };
 
-/** True only in state 2: properties present (even {}) and not opted open. */
+/** A `properties` we can actually introspect: a plain object map (even {}), never an array,
+ *  never a string/number/list. A malformed `properties` is UNINTROSPECTABLE, and the guard must
+ *  fail OPEN (state 1) rather than refuse every arg against garbage. */
+function isPropertyMap(p: unknown): p is Record<string, unknown> {
+  return typeof p === "object" && p !== null && !Array.isArray(p);
+}
+
+/** True only in state 2: an introspectable `properties` map present (even {}) and not opted open. */
 function isEnforced(schema: JsonSchema | undefined): schema is JsonSchema {
   return (
     !!schema &&
     typeof schema === "object" &&
     schema.properties !== undefined &&
+    isPropertyMap(schema.properties) &&
     schema.additionalProperties !== true
   );
 }

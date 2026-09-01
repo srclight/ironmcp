@@ -48,9 +48,9 @@ async def aassert_enforces_v2(server: Any, *, probe_key: str = PROBE_KEY) -> int
                     if not (
                         isinstance(schema, dict)
                         and schema.get("type") == "object"
-                        and "properties" in schema
+                        and isinstance(schema.get("properties"), dict)
                     ):
-                        continue  # uninstrospectable -> permissive by design
+                        continue  # uninstrospectable (absent or malformed properties) -> permissive
                     adv = schema.get("additionalProperties")
                     if adv is True:
                         continue  # declared open (passthrough) -> honoured, not a lie

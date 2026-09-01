@@ -60,6 +60,63 @@ describe("guardServer (low-level, the sugar)", () => {
       expect(tools.find((t) => t.name === "ping")!.inputSchema.additionalProperties).toBe(false);
     } finally { await close(); }
   });
+
+  it("works when guardServer is called BEFORE the app registers its handlers (the setRequestHandler patch branch)", async () => {
+    // Every other test wraps an already-registered server (the re-wrap branch). Here we guard a
+    // BARE server first, THEN register — exercising the patched setRequestHandler that wraps future
+    // registrations (guard.ts lines 120-125). A ref-identity mismatch on the request schemas would
+    // silently skip wrapping and this test would catch it.
+    const s = new Server({ name: "probe", version: "0" }, { capabilities: { tools: {} } });
+    guardServer(s, { reconnectHint: "check status" }); // guard FIRST
+    s.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS })); // register AFTER
+    s.setRequestHandler(CallToolRequestSchema, async (req: any) => ({
+      content: [{ type: "text", text: `ran ${req.params.name}` }],
+    }));
+    const { c, close } = await connect(s);
+    try {
+      const tools = (await c.listTools()).tools;
+      expect(tools.find((t) => t.name === "echo")!.inputSchema.additionalProperties).toBe(false);
+      const bad: any = await c.callTool({ name: "echo", arguments: { a: "x", typo: 1 } });
+      expect(bad.isError).toBe(true);
+      expect(bad.content.map((x: any) => x.text).join(" ")).toContain("unknown argument(s): typo");
+      const ok: any = await c.callTool({ name: "echo", arguments: { a: "x", b: "y" } });
+      expect(ok.isError).toBeFalsy();
+      expect(ok.content.map((x: any) => x.text).join(" ")).toContain("ran echo");
+    } finally { await close(); }
+  });
+
+  it("a refusal reports the ACCEPTED keys in structuredContent, not just the unknown ones", async () => {
+    const { c, close } = await connect(guardServer(buildLowLevel()));
+    try {
+      const r: any = await c.callTool({ name: "echo", arguments: { a: "x", typo: 1 } });
+      expect(r.isError).toBe(true);
+      expect(r.structuredContent.ironmcp.refused).toBe(true);
+      expect(r.structuredContent.ironmcp.unknown).toContain("typo");
+      // the machine-readable twin also names what WOULD have been accepted
+      expect(r.structuredContent.ironmcp.accepted).toEqual(expect.arrayContaining(["a", "b"]));
+    } finally { await close(); }
+  });
+
+  it("cold CallTool before any ListTools FAILS OPEN when the list handler THROWS (never bricks the call)", async () => {
+    // populated=false and the list handler cannot answer: the internal cold-populate try/catch
+    // (guard.ts 94-96) swallows the throw, schemas stays empty, and checkUnknownArgs(undefined,…)
+    // is permissive. The tool runs rather than the whole call bricking.
+    const s = new Server({ name: "probe", version: "0" }, { capabilities: { tools: {} } });
+    s.setRequestHandler(ListToolsRequestSchema, async () => {
+      throw new Error("list unavailable");
+    });
+    s.setRequestHandler(CallToolRequestSchema, async (req: any) => ({
+      content: [{ type: "text", text: `ran ${req.params.name}` }],
+    }));
+    guardServer(s);
+    const { c, close } = await connect(s);
+    try {
+      // No listTools() first -> the guard's cold-populate path runs and its listHandler throws.
+      const r: any = await c.callTool({ name: "echo", arguments: { a: "x", surprise: 1 } });
+      expect(r.isError).toBeFalsy(); // fail OPEN, not refused, not crashed
+      expect(r.content.map((x: any) => x.text).join(" ")).toContain("ran echo");
+    } finally { await close(); }
+  });
 });
 
 describe("guardCallTool + guardListTools (the primary primitives, composed by hand)", () => {
@@ -78,6 +135,28 @@ describe("guardCallTool + guardListTools (the primary primitives, composed by ha
       expect(tools.find((t) => t.name === "echo")!.inputSchema.additionalProperties).toBe(false);
       expect((await c.callTool({ name: "echo", arguments: { a: "x", typo: 1 } }) as any).isError).toBe(true);
       expect((await c.callTool({ name: "echo", arguments: { a: "x", b: "y" } }) as any).isError).toBeFalsy();
+    } finally { await close(); }
+  });
+
+  it("the STANDALONE guardCallTool refusal carries the same structuredContent.ironmcp twin", async () => {
+    // guardServer's guardedCall asserts structuredContent elsewhere; the standalone builder is a
+    // near-duplicate, so pin it too — a divergence in this path would otherwise go uncaught.
+    const schemas = new Map<string, any>();
+    const s = new Server({ name: "probe", version: "0" }, { capabilities: { tools: {} } });
+    s.setRequestHandler(ListToolsRequestSchema, guardListTools(async () => ({ tools: TOOLS }), schemas));
+    s.setRequestHandler(
+      CallToolRequestSchema,
+      guardCallTool(async (req: any) => ({ content: [{ type: "text", text: `ran ${req.params.name}` }] }), schemas),
+    );
+    const { c, close } = await connect(s as any);
+    try {
+      await c.listTools(); // capture schemas
+      const r = (await c.callTool({ name: "echo", arguments: { a: "x", typo: 1 } })) as any;
+      expect(r.isError).toBe(true);
+      expect(r.structuredContent.ironmcp.refused).toBe(true);
+      expect(r.structuredContent.ironmcp.tool).toBe("echo");
+      expect(r.structuredContent.ironmcp.unknown).toContain("typo");
+      expect(r.structuredContent.ironmcp.accepted).toEqual(expect.arrayContaining(["a", "b"]));
     } finally { await close(); }
   });
 });

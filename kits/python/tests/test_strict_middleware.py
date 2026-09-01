@@ -74,3 +74,53 @@ async def test_a_confusable_argument_name_is_diagnosed_not_just_refused():
     assert r.is_error is True
     assert "U+FF41" in text
     assert "which IS accepted" in text
+
+
+# --- a custom reconnect_hint reaches a REAL refusal message (not just the default) ------
+
+
+@pytest.mark.asyncio
+async def test_custom_reconnect_hint_is_threaded_into_the_refusal():
+    from ironmcp import strict_server
+    from tests.harness import build_probe_server
+
+    srv = build_probe_server(
+        strict_server(name="probe", version="0.0.0", reconnect_hint="reconnect the frobnicator")
+    )
+    r = await session_call(srv, "echo", {"a": "x", "typo": 1})
+    assert r.is_error is True
+    assert "reconnect the frobnicator" in result_text(r)
+
+
+# --- a caller-supplied middleware= runs AFTER the strict guard (guard is in FRONT) ------
+
+
+@pytest.mark.asyncio
+async def test_caller_middleware_runs_after_the_strict_guard():
+    """strict_server puts the guard FIRST: [guard, *extra]. On a refused call the guard short-
+    circuits before call_next, so a downstream middleware never sees the tools/call — proof the
+    guard sits in front. On an accepted call the downstream middleware DOES run."""
+    from mcp.server.context import ServerMiddleware
+
+    from ironmcp import strict_server
+    from tests.harness import build_probe_server
+
+    class _Recorder(ServerMiddleware):
+        def __init__(self):
+            self.seen: list[str] = []
+
+        async def __call__(self, ctx, call_next):
+            self.seen.append(getattr(ctx, "method", None))
+            return await call_next(ctx)
+
+    rec = _Recorder()
+    srv = build_probe_server(strict_server(name="probe", version="0.0.0", middleware=[rec]))
+
+    refused = await session_call(srv, "echo", {"a": "x", "typo": 1})
+    assert refused.is_error is True
+    assert "tools/call" not in rec.seen  # guard short-circuited in FRONT of the recorder
+
+    rec.seen.clear()
+    ok = await session_call(srv, "echo", {"a": "x"})
+    assert ok.is_error is False
+    assert "tools/call" in rec.seen  # accepted call flowed through to the downstream middleware
