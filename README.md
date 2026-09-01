@@ -38,8 +38,9 @@ app = strict_server(name="search", version="1.0.0")
 |-----|---------|----------|----------|
 | Python | `ironmcp` | PyPI | [`kits/python/`](kits/python/) |
 | TypeScript | `ironmcp` | npm | [`kits/typescript/`](kits/typescript/) |
+| PHP | `ironmcp/core` | Packagist | [`kits/php/`](kits/php/) |
 
-PHP is next; see [ROADMAP.md](ROADMAP.md). A kit conforms when a server built with its strict
+See [ROADMAP.md](ROADMAP.md) for what is next (Rust). A kit conforms when a server built with its strict
 layer passes every case in [`conformance/cases/`](conformance/cases/) — and every kit also
 proves the bare server is refused, because a corpus never watched to FAIL is theatre.
 

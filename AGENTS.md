@@ -37,6 +37,15 @@ import { guardServer } from "ironmcp";          // wraps a low-level Server, ord
 guardServer(server, { reconnectHint: "check status and reconnect" });
 ```
 
+
+**PHP** (the official `mcp/sdk`) — one call closes the schemas and adds the guard:
+
+```php
+use IronMcp\Harden;
+$server = Harden::server(Server::builder()->setServerInfo('search', '1.0.0')->addTool([Tools::class, 'search']));
+$server->run($transport); // an undeclared argument is now refused, not dropped
+```
+
 ## Serve it hardened over HTTP
 
 One call gives a bearer-guarded `/mcp`, an open `/healthz`, and the session-manager lifespan

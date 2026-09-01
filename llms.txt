@@ -22,3 +22,4 @@
 
 - [kits/python/README.md](kits/python/README.md): the Python kit (`pip install ironmcp`), targets mcp>=2.
 - [kits/typescript/README.md](kits/typescript/README.md): the TypeScript kit (`npm install ironmcp`), on the official SDK.
+- [kits/php/README.md](kits/php/README.md): the PHP kit (`composer require ironmcp/core`), on the official PHP SDK.
