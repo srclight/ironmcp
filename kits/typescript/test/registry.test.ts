@@ -77,6 +77,23 @@ describe("IronMcpRegistry", () => {
     expect(Number.isNaN(new Date(onDisk.srv1.started_at).getTime())).toBe(false);
   });
 
+  it("started_at is the CANONICAL registry format: ISO-8601 UTC, millisecond precision, trailing Z", async () => {
+    // The estate canon is exactly YYYY-MM-DDTHH:mm:ss.sssZ (3 fractional digits, Z — never a
+    // +00:00 offset, never 6-digit microseconds). Pin it so a future refactor can't drift the
+    // registry.json off byte-parity with the other kits once they normalize to this shape.
+    const reg = new IronMcpRegistry({ dir, isPidAlive: () => true });
+    await reg.register(new IronMcpEntry({ id: "srv1", namespace: "ns", pid: 1 }));
+    const onDisk = JSON.parse(await fs.readFile(join(dir, "registry.json"), "utf8"));
+    expect(onDisk.srv1.started_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(onDisk.srv1.started_at).not.toContain("+00:00"); // not the Python-style offset
+    expect(onDisk.srv1.started_at).not.toMatch(/\.\d{6}Z$/); // not Dart-style microseconds
+
+    // A fixed instant round-trips to the exact canonical string, byte-for-byte.
+    const fixed = new Date("2026-09-01T10:35:34.123Z");
+    const j = new IronMcpEntry({ id: "x", namespace: "ns", pid: 9, startedAt: fixed }).toJSON();
+    expect(j.started_at).toBe("2026-09-01T10:35:34.123Z");
+  });
+
   it("a stale lock left by a crashed holder is stolen so writes still land", async () => {
     // Pre-create the lock and back-date it well past staleLockAfter.
     const lock = join(dir, "registry.json.lock");

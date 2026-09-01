@@ -1,10 +1,12 @@
 """Self-discovery of ironmcp servers over a shared, language-neutral registry file.
 
 A Dart iCE, a Python ``*light`` server, and a Node scarlight all read and write the SAME
-discovery fabric. The on-disk format is byte-for-byte compatible with
-``kits/dart/lib/src/registry.dart`` (READ it): a JSON object keyed by entry-id, each value
-an entry of snake_case fields, an ``O_EXCL`` lockfile around every read-modify-write, and
-pid-liveness pruning on read.
+discovery fabric, so the wire format is language-neutral: a JSON object keyed by entry-id,
+each value an entry of snake_case fields, an ``O_EXCL`` lockfile around every
+read-modify-write, and pid-liveness pruning on read. ``started_at`` uses the shared
+canonical timestamp (see :func:`_now_iso`) so a freshly-written entry is byte-identical
+across every kit. (The Dart kit's ``toIso8601String`` still emits variable 3-or-6-digit
+precision; this kit pins the canonical 3-digit ``Z`` form regardless.)
 
 Entry deliberately carries NO hand-kept tool list — a consumer enumerates a server's tools
 via ``tools/list`` on its port (loqu8 invariant #3: the list that drifted from 6 to 66).
@@ -23,8 +25,16 @@ __all__ = ["IronMcpEntry", "IronMcpRegistry"]
 
 
 def _now_iso() -> str:
-    """ISO-8601 in UTC, matching Dart's ``DateTime.now().toUtc().toIso8601String()``."""
-    return datetime.now(timezone.utc).isoformat()
+    """The canonical registry timestamp: ISO-8601 UTC, MILLISECOND precision (exactly 3
+    fractional digits), trailing ``Z`` — e.g. ``2026-09-01T10:35:34.123Z``.
+
+    This is the ONE format every ironmcp kit MUST emit so ``registry.json`` stays
+    byte-identical across languages; it is exactly what JavaScript's ``Date.toISOString()``
+    produces. Python's own ``datetime.isoformat()`` is the outlier — it emits a ``+00:00``
+    offset and 6-digit microseconds — so it is normalised here rather than used directly.
+    """
+    now = datetime.now(timezone.utc)
+    return f"{now:%Y-%m-%dT%H:%M:%S}.{now.microsecond // 1000:03d}Z"
 
 
 @dataclass

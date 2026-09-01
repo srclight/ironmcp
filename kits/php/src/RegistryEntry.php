@@ -10,10 +10,12 @@ namespace IronMcp;
  * Deliberately carries no hand-kept tool list — a consumer enumerates a server's tools via
  * tools/list on its port (loqu8 invariant #3: the list that drifted from 6 to 66).
  *
- * The on-disk shape is byte-identical to the Dart `IronMcpEntry.toJson`
+ * The on-disk shape is byte-compatible with the Dart `IronMcpEntry.toJson`
  * (kits/dart/lib/src/registry.dart): the SAME field names, the SAME snake_case (code_sha,
- * started_at), the SAME omit-when-null optionals, and started_at as an ISO-8601 UTC string with
- * milliseconds and a trailing Z.
+ * started_at), the SAME omit-when-null optionals, and started_at in the CANONICAL registry
+ * timestamp format shared by every kit — ISO-8601 UTC, millisecond precision (exactly 3 fractional
+ * digits), trailing Z, e.g. 2026-09-01T10:35:34.123Z. That exact shape (not a +00:00 offset, not
+ * 6-digit microseconds) is what keeps registry.json byte-identical across languages.
  */
 final class RegistryEntry
 {
@@ -96,7 +98,12 @@ final class RegistryEntry
         );
     }
 
-    /** ISO-8601 UTC with milliseconds + Z, matching Dart's DateTime.toUtc().toIso8601String(). */
+    /**
+     * The canonical ironmcp registry timestamp: ISO-8601 UTC, millisecond precision (exactly 3
+     * fractional digits), trailing Z — e.g. 2026-09-01T10:35:34.123Z. Every kit emits this exact
+     * shape so registry.json is byte-identical across languages. `v` truncates the microseconds PHP
+     * carries down to 3 digits; the literal `\Z` pins the zone as Z, never a `+00:00` offset.
+     */
     private static function nowIso(): string
     {
         return (new \DateTimeImmutable('now', new \DateTimeZone('UTC')))->format('Y-m-d\TH:i:s.v\Z');

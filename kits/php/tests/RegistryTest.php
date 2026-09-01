@@ -119,6 +119,31 @@ final class RegistryTest extends TestCase
     }
 
     /**
+     * The CANONICAL registry timestamp, pinned exactly: ISO-8601 UTC, millisecond precision (exactly
+     * 3 fractional digits), trailing Z — e.g. 2026-09-01T10:35:34.123Z. Never a +00:00 offset, never
+     * 6-digit microseconds. This is the format every kit must emit so registry.json is byte-identical
+     * across languages; the compat audit found other kits drifting to +00:00 / 6-digit precision.
+     */
+    public function testStartedAtIsCanonicalMillisecondUtcZ(): void
+    {
+        $startedAt = (new RegistryEntry(id: 'x', namespace: 'ns', pid: 1))->toArray()['started_at'];
+        $this->assertIsString($startedAt);
+        // Exactly: YYYY-MM-DDTHH:MM:SS.mmmZ — 3 fractional digits, literal trailing Z.
+        $this->assertMatchesRegularExpression(
+            '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/',
+            $startedAt,
+            'started_at must be ISO-8601 UTC with millisecond precision and a trailing Z',
+        );
+        $this->assertStringNotContainsString('+00:00', $startedAt, 'must use Z, never a +00:00 offset');
+        // An explicitly supplied timestamp is preserved verbatim (round-trips unchanged).
+        $explicit = '2026-09-01T10:35:34.123Z';
+        $this->assertSame(
+            $explicit,
+            (new RegistryEntry(id: 'x', namespace: 'ns', pid: 1, startedAt: $explicit))->toArray()['started_at'],
+        );
+    }
+
+    /**
      * The Dart-compat guarantee: the top-level file is a FLAT object keyed by entry id (not nested
      * by namespace), each value the exact snake_case entry shape — so a Dart server reading this
      * file gets valid IronMcpEntry maps. This is the estate-wide discovery fabric.

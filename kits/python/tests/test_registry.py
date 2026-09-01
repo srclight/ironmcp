@@ -3,11 +3,17 @@ list (#3), and the on-disk format byte-compatible with the Dart kit."""
 
 import json
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 
 import pytest
 
 from ironmcp import IronMcpEntry, IronMcpRegistry
+
+# The ONE canonical registry timestamp every kit must emit: ISO-8601 UTC, exactly three
+# fractional (millisecond) digits, trailing Z. Byte-identical to JS Date.toISOString().
+_CANONICAL_STARTED_AT = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
 
 
 @pytest.fixture
@@ -93,6 +99,29 @@ def test_on_disk_file_is_keyed_by_entry_id_matching_dart(reg_dir):
     assert "tools" not in entry
     # optional-none fields omitted, present ones kept
     assert entry["port"] == 8888 and entry["transport"] == "streamable-http"
+
+
+def test_started_at_is_the_canonical_millisecond_z_format():
+    """started_at MUST be ISO-8601 UTC, millisecond precision, trailing Z (2026-09-01T
+    10:35:34.123Z) — NOT Python's default +00:00 / 6-digit isoformat. This is the format
+    that makes registry.json byte-identical across the Dart/TS/PHP/Python kits."""
+    s = IronMcpEntry(id="x", namespace="ns", pid=1).to_json()["started_at"]
+    assert _CANONICAL_STARTED_AT.match(s), f"non-canonical started_at: {s!r}"
+    assert "+00:00" not in s and s.endswith("Z")
+    # It is still a real, parseable instant (round-trips through strptime).
+    datetime.strptime(s, "%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def test_from_json_preserves_a_foreign_started_at_verbatim():
+    """A timestamp written by another kit is round-tripped byte-for-byte, never reformatted
+    — only a MISSING started_at is filled with our canonical value."""
+    foreign = "2026-09-01T10:35:34.123Z"
+    e = IronMcpEntry.from_json(
+        {"id": "x", "namespace": "ns", "pid": 1, "capabilities": {}, "started_at": foreign}
+    )
+    assert e.started_at == foreign
+    missing = IronMcpEntry.from_json({"id": "y", "namespace": "ns", "pid": 1, "capabilities": {}})
+    assert _CANONICAL_STARTED_AT.match(missing.started_at)
 
 
 def test_xdg_path_resolution_matches_dart(monkeypatch, tmp_path):

@@ -1,6 +1,25 @@
 import 'dart:convert';
 import 'dart:io';
 
+/// The CANONICAL registry `started_at` timestamp: ISO-8601 UTC, MILLISECOND
+/// precision (exactly 3 fractional digits), trailing `Z` — e.g.
+/// `2026-09-01T10:35:34.123Z`.
+///
+/// This is the ONE format every ironmcp kit MUST emit so `registry.json` stays
+/// byte-identical across languages; it is exactly what JavaScript's
+/// `Date.toISOString()` and Python's normalised `_now_iso()` produce. Dart's own
+/// `DateTime.toIso8601String()` is the outlier — it emits variable 3-or-6-digit
+/// precision (6 digits whenever the microsecond component is non-zero) — so it is
+/// normalised here rather than used directly. Sub-millisecond microseconds are
+/// TRUNCATED (floored), never rounded, matching Python's `microsecond // 1000`.
+String isoMillisUtc(DateTime dt) {
+  final u = dt.toUtc();
+  String pad(int n, int width) => n.toString().padLeft(width, '0');
+  return '${pad(u.year, 4)}-${pad(u.month, 2)}-${pad(u.day, 2)}'
+      'T${pad(u.hour, 2)}:${pad(u.minute, 2)}:${pad(u.second, 2)}'
+      '.${pad(u.millisecond, 3)}Z';
+}
+
 /// A live ironmcp server's registration. Language-neutral JSON (snake_case), so a
 /// Dart iCE, a Python `*light` server, and a Node scarlight all read and write
 /// the SAME discovery fabric. Deliberately carries no hand-kept tool list — a
@@ -42,7 +61,7 @@ class IronMcpEntry {
         if (version != null) 'version': version,
         if (codeSha != null) 'code_sha': codeSha,
         'capabilities': capabilities,
-        'started_at': startedAt.toIso8601String(),
+        'started_at': isoMillisUtc(startedAt),
       };
 
   static IronMcpEntry fromJson(Map<String, dynamic> j) => IronMcpEntry(

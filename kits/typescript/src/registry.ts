@@ -1,7 +1,8 @@
 // Self-discovery of ironmcp servers. File-backed, cross-language JSON (snake_case), so a Dart
 // iCE, a Python *light server, and a Node scarlight all read and write the SAME discovery fabric.
 //
-// FORMAT — byte-compatible with kits/dart/lib/src/registry.dart (the estate-wide reference):
+// FORMAT — the shared cross-language registry.json fabric (structure mirrors
+// kits/dart/lib/src/registry.dart): flat JSON object, snake_case, keyed by entry id.
 //   * path   = XDG dir ($XDG_RUNTIME_DIR else $XDG_STATE_HOME else ~/.local/state) + /ironmcp/
 //   * file   = registry.json, a flat JSON object keyed by ENTRY ID -> entry object
 //              (this MATCHES the Dart reference `map[entry.id] = entry.toJson()`; namespace is a
@@ -9,6 +10,11 @@
 //   * entry  = { id, namespace, pid, host?, port?, transport?, version?, code_sha?,
 //                capabilities, started_at }   — NO tool list (a consumer enumerates via
 //                tools/list; loqu8 invariant #3: the count that drifted from 6 to 66)
+//   * started_at = the CANONICAL registry timestamp: ISO-8601 UTC, MILLISECOND precision
+//                (exactly 3 fractional digits), trailing Z — e.g. 2026-09-01T10:35:34.123Z.
+//                This kit is already canonical: Date.toISOString() emits precisely that shape.
+//                (Not yet byte-identical estate-wide — the parity audit found Dart emits
+//                microseconds and Python emits a +00:00 offset; those kits normalize TO this.)
 //   * lock   = registry.json.lock, created atomically with O_EXCL (fs open flag "wx"),
 //              stolen after ~30s if stale, around every read-modify-write (invariant #9)
 //   * discover() prunes entries whose pid is dead and rewrites the file (lazy GC, invariant #10)
@@ -64,7 +70,10 @@ export class IronMcpEntry {
     if (this.version != null) j.version = this.version;
     if (this.codeSha != null) j.code_sha = this.codeSha;
     j.capabilities = this.capabilities;
-    j.started_at = this.startedAt.toISOString(); // ISO-8601 UTC (Date.toISOString is always Z)
+    // CANONICAL started_at: ISO-8601 UTC, millisecond precision (3 fractional digits), trailing Z.
+    // Date.toISOString() is spec-guaranteed to be exactly YYYY-MM-DDTHH:mm:ss.sssZ — no offset,
+    // no microseconds — so it needs no truncation to hit the registry canon (e.g. ...123Z).
+    j.started_at = this.startedAt.toISOString();
     return j;
   }
 
