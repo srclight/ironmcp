@@ -15,3 +15,4 @@ export 'src/serve.dart';
 export 'src/quit.dart';
 export 'src/registry.dart';
 export 'src/readiness.dart';
+export 'src/auth.dart';
