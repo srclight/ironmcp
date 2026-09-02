@@ -4,6 +4,12 @@
   "description": "Hardened, conformant MCP tools that refuse undeclared arguments with a recoverable error and enforce exactly what they advertise.",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/srclight/ironmcp.git",
+    "directory": "kits/typescript"
+  },
+  "homepage": "https://github.com/srclight/ironmcp/tree/master/kits/typescript",
   "engines": {
     "node": ">=20"
   },
