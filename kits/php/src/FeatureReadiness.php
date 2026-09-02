@@ -26,11 +26,9 @@ final class FeatureReadiness
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        $out = [
-            'id' => $this->id,
-            'label' => $this->label,
-            'status' => $this->status->value,
-        ];
+        // id is the map key under `features`; label is a display hint kept out of
+        // the wire shape so the per-feature value is byte-identical across kits.
+        $out = ['status' => $this->status->value];
         if ($this->requires !== []) {
             $out['requires'] = $this->requires;
         }

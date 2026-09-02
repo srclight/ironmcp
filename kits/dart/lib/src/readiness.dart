@@ -20,9 +20,10 @@ class FeatureReadiness {
   final String? details;
   final String? reason;
 
+  /// The value under `features["<id>"]`. `id` is the map key, so it is not
+  /// repeated here; `label` is a display hint kept out of the wire shape so the
+  /// per-feature value is byte-identical across every kit.
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'label': label,
         'status': status.name,
         if (requires.isNotEmpty) 'requires': requires,
         if (details != null) 'details': details,
@@ -48,11 +49,14 @@ class LibraryStatus {
   final int symbolsOk;
   final String? error;
 
+  /// The value under `dependencies["<name>"]`. `name` is the map key. The symbol
+  /// counts are FFI-specific, so they appear ONLY when a probe ran — a non-native
+  /// dependency (a service, a database) just carries `loaded` and an optional
+  /// `error`, which keeps `dependencies` meaningful for every kind of server.
   Map<String, dynamic> toJson() => {
-        'name': name,
         'loaded': loaded,
-        'symbols_checked': symbolsChecked,
-        'symbols_ok': symbolsOk,
+        if (symbolsChecked > 0) 'symbols_checked': symbolsChecked,
+        if (symbolsChecked > 0) 'symbols_ok': symbolsOk,
         if (error != null) 'error': error,
       };
 }
@@ -64,8 +68,9 @@ class DataFileStatus {
   final bool found;
   final String? path;
 
+  /// The value under `data_files["<label>"]`. `label` is the map key.
   Map<String, dynamic> toJson() =>
-      {'label': label, 'found': found, if (path != null) 'path': path};
+      {'found': found, if (path != null) 'path': path};
 }
 
 /// A full readiness report. ironmcp owns the shape + the verdict semantics; the
@@ -101,13 +106,21 @@ class ReadinessReport {
     return ReadinessStatus.ready;
   }
 
+  /// The wire shape. Learned from the ecosystem's health-check convention
+  /// (IETF health-check draft / Kubernetes / Spring Actuator all key on `status`)
+  /// and from loqu8's map-by-id structure: `features`, `dependencies`, and
+  /// `data_files` are OBJECTS keyed by id/name — an agent reads
+  /// `features["<id>"].status` in one hop, there is no list order to keep
+  /// byte-identical across kits, and duplicate ids cannot hide. `dependencies`
+  /// (not `libs`) so a server with services rather than native libraries is not
+  /// misdescribed.
   Map<String, dynamic> toJson() => {
         'app_version': appVersion,
         if (nativeVersion != null) 'native_version': nativeVersion,
-        'overall_status': overallStatus.name,
-        'features': features.map((f) => f.toJson()).toList(),
-        'libs': libs.map((l) => l.toJson()).toList(),
-        'data_files': dataFiles.map((d) => d.toJson()).toList(),
+        'status': overallStatus.name,
+        'features': {for (final f in features) f.id: f.toJson()},
+        'dependencies': {for (final l in libs) l.name: l.toJson()},
+        'data_files': {for (final d in dataFiles) d.label: d.toJson()},
         'platform': platform,
       };
 }

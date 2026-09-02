@@ -69,10 +69,17 @@ describe("ReadinessReport", () => {
     }).toJSON();
     expect(j.app_version).toBe("2.0");
     expect(j.native_version).toBe("1.5");
-    expect(j.overall_status).toBe("ready");
-    expect((j.libs as Record<string, unknown>[])[0].symbols_ok).toBe(3);
-    expect((j.features as Record<string, unknown>[])[0].requires).toEqual(["x"]);
-    expect((j.data_files as Record<string, unknown>[])[0].found).toBe(true);
+    expect(j.status).toBe("ready"); // was overall_status
+    expect(j).not.toHaveProperty("libs"); // renamed to `dependencies`
+    // features / dependencies / data_files are objects keyed by id/name.
+    const feats = j.features as Record<string, Record<string, unknown>>;
+    const deps = j.dependencies as Record<string, Record<string, unknown>>;
+    const files = j.data_files as Record<string, Record<string, unknown>>;
+    expect(feats.a.requires).toEqual(["x"]);
+    expect(feats.a).not.toHaveProperty("id"); // id is the key
+    expect(deps.libfoo.symbols_ok).toBe(3);
+    expect(files.dict.found).toBe(true);
+    expect(files.dict).not.toHaveProperty("label");
   });
 
   it("omits absent optional fields: an empty/absent requires, and a data file with no path", () => {
@@ -86,23 +93,24 @@ describe("ReadinessReport", () => {
       ],
       dataFiles: [{ label: "dict", found: false }], // path absent
     }).toJSON();
-    const feats = j.features as Record<string, unknown>[];
-    expect(feats[0]).not.toHaveProperty("requires");
-    expect(feats[1]).not.toHaveProperty("requires"); // empty array is dropped, not emitted as []
-    expect(feats[0]).not.toHaveProperty("details");
-    expect(feats[0]).not.toHaveProperty("reason");
-    const files = j.data_files as Record<string, unknown>[];
-    expect(files[0]).not.toHaveProperty("path");
-    expect(files[0].found).toBe(false);
+    const feats = j.features as Record<string, Record<string, unknown>>;
+    expect(feats.a).not.toHaveProperty("requires");
+    expect(feats.b).not.toHaveProperty("requires"); // empty array is dropped, not emitted as []
+    expect(feats.a).not.toHaveProperty("details");
+    expect(feats.a).not.toHaveProperty("reason");
+    const files = j.data_files as Record<string, Record<string, unknown>>;
+    expect(files.dict).not.toHaveProperty("path");
+    expect(files.dict.found).toBe(false);
   });
 
-  it("a lib with no symbol counts still serialises symbols_checked/ok as 0", () => {
+  it("a dependency with no symbol probe omits the FFI symbol counts (services/dbs stay clean)", () => {
     const j = new ReadinessReport({
       appVersion: "1",
-      libs: [{ name: "x", loaded: false }],
+      libs: [{ name: "postgres", loaded: true }],
     }).toJSON();
-    const lib = (j.libs as Record<string, unknown>[])[0];
-    expect(lib.symbols_checked).toBe(0);
-    expect(lib.symbols_ok).toBe(0);
+    const dep = (j.dependencies as Record<string, Record<string, unknown>>).postgres;
+    expect(dep.loaded).toBe(true);
+    expect(dep).not.toHaveProperty("symbols_checked");
+    expect(dep).not.toHaveProperty("symbols_ok");
   });
 });

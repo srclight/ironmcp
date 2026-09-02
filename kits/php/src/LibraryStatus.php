@@ -22,12 +22,14 @@ final class LibraryStatus
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        $out = [
-            'name' => $this->name,
-            'loaded' => $this->loaded,
-            'symbols_checked' => $this->symbolsChecked,
-            'symbols_ok' => $this->symbolsOk,
-        ];
+        // name is the map key under `dependencies`. Symbol counts are FFI-specific,
+        // so they appear ONLY when a probe ran — a service/database dependency
+        // carries just `loaded` and an optional `error`.
+        $out = ['loaded' => $this->loaded];
+        if ($this->symbolsChecked > 0) {
+            $out['symbols_checked'] = $this->symbolsChecked;
+            $out['symbols_ok'] = $this->symbolsOk;
+        }
         if ($this->error !== null) {
             $out['error'] = $this->error;
         }

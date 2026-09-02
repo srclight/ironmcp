@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ironmcp"
-version = "0.6.0"
+version = "0.7.0"
 description = "Hardened, conformant MCP tools that refuse undeclared arguments with a recoverable error and enforce exactly what they advertise."
 readme = "README.md"
 requires-python = ">=3.11"

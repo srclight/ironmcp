@@ -23,6 +23,7 @@
 ## Spec and conformance
 
 - [spec/strict-args.md](spec/strict-args.md): the rule — the 3-state contract and the refusal message.
+- [spec/readiness.md](spec/readiness.md): the readiness report shape — `status` + map-by-id, identical in every kit.
 - [spec/conformance.md](spec/conformance.md): what a conforming server must satisfy.
 - [conformance/cases](conformance/cases): the language-neutral test cases, owned by no language.
 

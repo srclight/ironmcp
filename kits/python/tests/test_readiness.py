@@ -78,10 +78,14 @@ def test_to_json_is_stable_snake_case_with_the_computed_verdict():
         platform={"os": "linux"},
     ).to_json()
     assert j["app_version"] == "2.0"
-    assert j["overall_status"] == "ready"
-    assert j["libs"][0]["symbols_ok"] == 3
-    assert j["features"][0]["requires"] == ["x"]
-    assert j["data_files"][0]["found"] is True
+    assert j["status"] == "ready"  # was overall_status
+    # features / dependencies / data_files are dicts keyed by id/name.
+    assert j["features"]["a"]["requires"] == ["x"]
+    assert "id" not in j["features"]["a"]  # id is the key
+    assert "libs" not in j  # renamed to `dependencies`
+    assert j["dependencies"]["libfoo"]["symbols_ok"] == 3
+    assert j["data_files"]["dict"]["found"] is True
+    assert "label" not in j["data_files"]["dict"]
     assert j["native_version"] == "1.5"
 
 
@@ -107,7 +111,9 @@ def test_to_json_omits_optional_none_fields():
     assert "details" not in feat and "reason" not in feat and "requires" not in feat
 
     lib = LibraryStatus(name="libfoo", loaded=True).to_json()
+    # A dependency with no symbol probe (a service/db) omits the FFI symbol counts.
     assert "error" not in lib
+    assert "symbols_checked" not in lib and "symbols_ok" not in lib
 
     data = DataFileStatus(label="dict", found=False).to_json()
     assert "path" not in data

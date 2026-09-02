@@ -51,17 +51,40 @@ final class ReadinessReport
         return ReadinessStatus::Ready;
     }
 
-    /** @return array<string, mixed> */
+    /**
+     * The wire shape. Ecosystem health-check vocabulary (`status`) + loqu8's
+     * map-by-id structure: features/dependencies/data_files are OBJECTS keyed by
+     * id/name, so an agent reads `features["<id>"].status` in one hop, there is no
+     * list order to keep byte-identical across kits, and duplicate ids cannot hide.
+     * `dependencies` (not `libs`) so a server with services rather than native
+     * libraries is not misdescribed. The maps are cast to objects so an empty one
+     * encodes as `{}` (matching the other kits), never `[]`.
+     *
+     * @return array<string, mixed>
+     */
     public function toArray(): array
     {
+        $features = [];
+        foreach ($this->features as $f) {
+            $features[$f->id] = $f->toArray();
+        }
+        $dependencies = [];
+        foreach ($this->libs as $l) {
+            $dependencies[$l->name] = $l->toArray();
+        }
+        $dataFiles = [];
+        foreach ($this->dataFiles as $d) {
+            $dataFiles[$d->label] = $d->toArray();
+        }
+
         $out = ['app_version' => $this->appVersion];
         if ($this->nativeVersion !== null) {
             $out['native_version'] = $this->nativeVersion;
         }
-        $out['overall_status'] = $this->overallStatus()->value;
-        $out['features'] = array_map(static fn (FeatureReadiness $f): array => $f->toArray(), $this->features);
-        $out['libs'] = array_map(static fn (LibraryStatus $l): array => $l->toArray(), $this->libs);
-        $out['data_files'] = array_map(static fn (DataFileStatus $d): array => $d->toArray(), $this->dataFiles);
+        $out['status'] = $this->overallStatus()->value;
+        $out['features'] = (object) $features;
+        $out['dependencies'] = (object) $dependencies;
+        $out['data_files'] = (object) $dataFiles;
         $out['platform'] = (object) $this->platform;
 
         return $out;
