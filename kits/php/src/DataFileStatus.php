@@ -19,7 +19,8 @@ final class DataFileStatus
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        $out = ['label' => $this->label, 'found' => $this->found];
+        // label is the map key under `data_files`.
+        $out = ['found' => $this->found];
         if ($this->path !== null) {
             $out['path'] = $this->path;
         }

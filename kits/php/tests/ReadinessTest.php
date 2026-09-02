@@ -94,9 +94,29 @@ final class ReadinessTest extends TestCase
         ))->toArray();
 
         $this->assertSame('2.0', $j['app_version']);
-        $this->assertSame('ready', $j['overall_status']);
-        $this->assertSame(3, $j['libs'][0]['symbols_ok']);
-        $this->assertSame(['x'], $j['features'][0]['requires']);
-        $this->assertTrue($j['data_files'][0]['found']);
+        $this->assertSame('ready', $j['status']); // was overall_status
+        // features / dependencies / data_files are objects keyed by id/name.
+        $this->assertArrayNotHasKey('libs', $j); // renamed to `dependencies`
+        $deps = (array) $j['dependencies'];
+        $feats = (array) $j['features'];
+        $files = (array) $j['data_files'];
+        $this->assertSame(3, $deps['libfoo']['symbols_ok']);
+        $this->assertSame(['x'], $feats['a']['requires']);
+        $this->assertArrayNotHasKey('id', $feats['a']); // id is the key
+        $this->assertTrue($files['dict']['found']);
+        $this->assertArrayNotHasKey('label', $files['dict']);
+    }
+
+    public function testDependencyWithoutSymbolProbeOmitsFfiCounts(): void
+    {
+        // `dependencies` must stay meaningful for a service/db, not only native libs.
+        $j = (new ReadinessReport(
+            appVersion: '1',
+            libs: [new LibraryStatus('postgres', true)],
+        ))->toArray();
+        $dep = ((array) $j['dependencies'])['postgres'];
+        $this->assertTrue($dep['loaded']);
+        $this->assertArrayNotHasKey('symbols_checked', $dep);
+        $this->assertArrayNotHasKey('symbols_ok', $dep);
     }
 }

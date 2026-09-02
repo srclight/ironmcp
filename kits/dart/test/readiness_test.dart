@@ -41,7 +41,7 @@ void main() {
     );
   });
 
-  test('toJson is stable snake_case with the computed verdict', () {
+  test('toJson uses `status` + maps keyed by id/name (the standard shape)', () {
     final j = ReadinessReport(
       appVersion: '2.0',
       nativeVersion: '1.5',
@@ -57,10 +57,23 @@ void main() {
       platform: {'os': 'linux'},
     ).toJson();
     expect(j['app_version'], '2.0');
-    expect(j['overall_status'], 'ready');
-    expect((j['libs'] as List).first['symbols_ok'], 3);
-    expect((j['features'] as List).first['requires'], ['x']);
-    expect((j['data_files'] as List).first['found'], isTrue);
+    expect(j['status'], 'ready'); // was `overall_status`
+    // features / dependencies / data_files are OBJECTS keyed by id/name.
+    expect(j['features'], isA<Map>());
+    expect((j['features'] as Map)['a']['requires'], ['x']);
+    expect((j['features'] as Map)['a'].containsKey('id'), isFalse); // id is the key
+    expect(j.containsKey('libs'), isFalse); // renamed to `dependencies`
+    expect((j['dependencies'] as Map)['libfoo']['symbols_ok'], 3);
+    expect((j['data_files'] as Map)['dict']['found'], isTrue);
+    expect((j['data_files'] as Map)['dict'].containsKey('label'), isFalse);
+  });
+
+  test('a dependency with no symbol probe omits the FFI symbol counts', () {
+    // `dependencies` must stay meaningful for a service/db, not only native libs.
+    final j = LibraryStatus(name: 'postgres', loaded: true).toJson();
+    expect(j['loaded'], isTrue);
+    expect(j.containsKey('symbols_checked'), isFalse);
+    expect(j.containsKey('symbols_ok'), isFalse);
   });
 
   // GAP: an empty feature list must report ready (nothing counted against it).
@@ -131,7 +144,7 @@ void main() {
   // uncovered. A missing data file must serialize found:false with NO path key.
   test('DataFileStatus omits path when the file was not found', () {
     final j = DataFileStatus(label: 'dict', found: false).toJson();
-    expect(j['label'], 'dict');
+    expect(j.containsKey('label'), isFalse); // label is the map key, not in the value
     expect(j['found'], isFalse);
     expect(j.containsKey('path'), isFalse); // absent-path omission arm
   });

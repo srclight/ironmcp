@@ -37,27 +37,33 @@ export type ReadinessReportInput = {
   platform?: Record<string, unknown>;
 };
 
+// `id` is the map key under `features`; `label` is a display hint kept out of the
+// wire shape so the per-feature value is byte-identical across kits.
 function featureToJson(f: FeatureReadiness): Record<string, unknown> {
-  const j: Record<string, unknown> = { id: f.id, label: f.label, status: f.status };
+  const j: Record<string, unknown> = { status: f.status };
   if (f.requires && f.requires.length > 0) j.requires = f.requires;
   if (f.details != null) j.details = f.details;
   if (f.reason != null) j.reason = f.reason;
   return j;
 }
 
+// `name` is the map key under `dependencies`. Symbol counts are FFI-specific, so
+// they appear ONLY when a probe ran — a non-native dependency (a service, a
+// database) carries just `loaded` and an optional `error`.
 function libToJson(l: LibraryStatus): Record<string, unknown> {
-  const j: Record<string, unknown> = {
-    name: l.name,
-    loaded: l.loaded,
-    symbols_checked: l.symbolsChecked ?? 0,
-    symbols_ok: l.symbolsOk ?? 0,
-  };
+  const j: Record<string, unknown> = { loaded: l.loaded };
+  const checked = l.symbolsChecked ?? 0;
+  if (checked > 0) {
+    j.symbols_checked = checked;
+    j.symbols_ok = l.symbolsOk ?? 0;
+  }
   if (l.error != null) j.error = l.error;
   return j;
 }
 
+// `label` is the map key under `data_files`.
 function dataFileToJson(d: DataFileStatus): Record<string, unknown> {
-  const j: Record<string, unknown> = { label: d.label, found: d.found };
+  const j: Record<string, unknown> = { found: d.found };
   if (d.path != null) j.path = d.path;
   return j;
 }
@@ -89,13 +95,19 @@ export class ReadinessReport {
     return "ready";
   }
 
+  // Ecosystem health-check vocabulary (`status`) + loqu8's map-by-id structure:
+  // features/dependencies/data_files are OBJECTS keyed by id/name, so an agent
+  // reads `features["<id>"].status` in one hop, there is no list order to keep
+  // byte-identical across kits, and duplicate ids cannot hide. `dependencies`
+  // (not `libs`) so a server with services rather than native libraries is not
+  // misdescribed.
   toJSON(): Record<string, unknown> {
     const j: Record<string, unknown> = { app_version: this.appVersion };
     if (this.nativeVersion != null) j.native_version = this.nativeVersion;
-    j.overall_status = this.overallStatus;
-    j.features = this.features.map(featureToJson);
-    j.libs = this.libs.map(libToJson);
-    j.data_files = this.dataFiles.map(dataFileToJson);
+    j.status = this.overallStatus;
+    j.features = Object.fromEntries(this.features.map((f) => [f.id, featureToJson(f)]));
+    j.dependencies = Object.fromEntries(this.libs.map((l) => [l.name, libToJson(l)]));
+    j.data_files = Object.fromEntries(this.dataFiles.map((d) => [d.label, dataFileToJson(d)]));
     j.platform = this.platform;
     return j;
   }
